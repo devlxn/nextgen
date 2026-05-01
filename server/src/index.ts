@@ -1,17 +1,16 @@
 import express, { RequestHandler } from "express";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import { createClient } from "redis";
-import { RedisClientType } from "redis";
-import RedisStore from "connect-redis";
-import passport from "passport";
 import session from "express-session";
+import passport from "passport";
 import { Strategy as SteamStrategy } from "passport-steam";
 import cors from "cors";
 import axios from "axios";
 import axiosRetry from "axios-retry";
 import User from "./models/User";
 import Match from "./models/Match";
+import { createClient } from "redis";
+import RedisStore from "connect-redis";
 
 // Расширение типа Session для поддержки passport
 declare module "express-session" {
@@ -24,14 +23,29 @@ declare module "express-session" {
 
 dotenv.config();
 
-// Настройка axios с повторными попытками
+// Настройка Redis
+const redisClient = createClient({
+  url: process.env.REDIS_URL || "redis://127.0.0.1:6379"
+});
+
+redisClient.connect().catch(console.error);
+
+const redisStore = new RedisStore({
+  client: redisClient,
+  prefix: "dotaw:",
+});
+
+// Настройка axios с агрессивными повторными попытками
 axiosRetry(axios, {
-  retries: 3,
-  retryDelay: (retryCount) => retryCount * 1000,
+  retries: 5,
+  retryDelay: (retryCount) => retryCount * 5000,
   retryCondition: (error) => {
     return (
       axiosRetry.isNetworkOrIdempotentRequestError(error) ||
-      error.response?.status === 429
+      error.response?.status === 429 ||
+      error.response?.status === 504 ||
+      error.code === 'ECONNABORTED' ||
+      error.message.includes('timeout')
     );
   },
 });
@@ -46,20 +60,10 @@ interface SteamProfile {
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Redis клиент
-const redisClient: RedisClientType = createClient({
-  url: process.env.REDIS_URL || "redis://localhost:6379",
-});
-redisClient.on("error", (err) => console.error("Redis error:", err));
-redisClient
-  .connect()
-  .then(() => console.log("Redis connected"))
-  .catch((err) => console.error("Redis connection error:", err));
-
 // Middleware
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: ["https://dotaw-tracker.vercel.app", "http://localhost:5173"],
     credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -68,53 +72,37 @@ app.use(
 app.use(express.json());
 app.use(
   session({
-    store: new RedisStore({ client: redisClient, prefix: "sess:" }), // Исправленный синтаксис
+    store: redisStore,
     secret: process.env.SESSION_SECRET || "hBlGYtAWhM",
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       httpOnly: true,
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 1000 * 60 * 60 * 24,
     },
   })
 );
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Логирование запросов
-app.use((req, res, next) => {
-  console.log(
-    `Request: ${req.method} ${req.url} - Query: ${JSON.stringify(req.query)}`
-  );
-  next();
-});
-
 // MongoDB
 mongoose
-  .connect(process.env.MONGODB_URI || "")
+  .connect(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/dotaw")
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
 // Passport
 passport.serializeUser((user: any, done) => {
-  console.log("Serializing user:", user);
   done(null, user.steamId);
 });
 
 passport.deserializeUser(async (id: string, done) => {
   try {
-    console.log("Deserializing ID:", id);
     const user = await User.findOne({ steamId: id });
-    if (!user) {
-      console.log("User not found for steamId:", id);
-      return done(null, null);
-    }
-    console.log("Deserialized user:", user);
     done(null, user);
   } catch (err) {
-    console.error("Deserialize error:", err);
     done(err, null);
   }
 });
@@ -122,20 +110,12 @@ passport.deserializeUser(async (id: string, done) => {
 passport.use(
   new SteamStrategy(
     {
-      returnURL: "http://localhost:5000/auth/steam/return",
-      realm: "http://localhost:5000/",
+      returnURL: process.env.RETURN_URL || "http://localhost:5000/auth/steam/return",
+      realm: process.env.REALM || "http://localhost:5000/",
       apiKey: process.env.STEAM_API_KEY || "",
     },
-    async (
-      identifier: string,
-      profile: SteamProfile,
-      done: (err: any, user?: any) => void
-    ) => {
-      console.log("Steam auth callback, profile:", profile);
+    async (identifier: string, profile: SteamProfile, done: any) => {
       try {
-        if (!profile.id) {
-          throw new Error("Invalid Steam profile");
-        }
         const user = await User.findOneAndUpdate(
           { steamId: profile.id },
           {
@@ -143,12 +123,10 @@ passport.use(
             displayName: profile.displayName,
             avatar: profile.photos?.[2]?.value || "",
           },
-          { upsert: true, new: true, runValidators: true }
+          { upsert: true, new: true }
         );
-        console.log("Updated/Saved user:", user);
         return done(null, user);
       } catch (err) {
-        console.error("Steam auth error:", err);
         return done(err);
       }
     }
@@ -156,310 +134,248 @@ passport.use(
 );
 
 // Routes
-app.get("/", (req, res) => res.send("Dota 2 Tracker Backend"));
-
 app.get("/auth/steam", passport.authenticate("steam"));
 
 app.get(
   "/auth/steam/return",
-  passport.authenticate("steam", { failureRedirect: "http://localhost:5173/" }),
+  passport.authenticate("steam", { failureRedirect: "http://localhost:5173/profile" }),
   (req, res) => {
-    console.log("Steam auth return, user:", req.user);
-    if (!req.user) {
-      console.error("No user after authentication");
-      return res.status(401).json({ error: "Authentication failed" });
-    }
     res.redirect("http://localhost:5173/profile");
   }
 );
 
-app.get("/auth/logout", (req, res) => {
-  console.log("Logout request received, session:", req.session);
-  req.logout((err) => {
-    if (err) {
-      console.error("Logout error:", err);
-      return res.status(500).json({ error: "Failed to logout" });
-    }
-    req.session.destroy((err) => {
-      if (err) {
-        console.error("Session destroy error:", err);
-        return res.status(500).json({ error: "Failed to destroy session" });
-      }
-      console.log("Session destroyed");
-      res.json({ message: "Logged out successfully" });
-    });
+app.get("/api/user", (req, res) => {
+  res.json(req.user || null);
+});
+
+app.get("/api/logout", (req, res) => {
+  req.logout(() => {
+    res.redirect("http://localhost:5173/profile");
   });
 });
 
-app.get("/api/user", (req, res) => {
-  console.log(
-    "User request - Session:",
-    req.session,
-    "Passport user:",
-    req.session?.passport?.user,
-    "Cookies:",
-    req.cookies
-  );
-  if (req.user) {
-    console.log("Returning user from req.user:", req.user);
-    res.json(req.user);
-  } else if (req.session?.passport?.user) {
-    User.findOne({ steamId: req.session.passport.user })
-      .then((user) => {
-        if (user) {
-          console.log("Found user by steamId from session:", user);
-          req.user = user;
-          res.json(user);
-        } else {
-          console.log("No user found for steamId:", req.session.passport.user);
-          res.json(null); // Возвращаем null вместо 401
-        }
-      })
-      .catch((err) => {
-        console.error("Error finding user:", err);
-        res.status(500).json({ error: "Server error" });
-      });
-  } else {
-    console.log("No user or session data, returning null");
-    res.json(null); // Возвращаем null вместо 401
+app.get("/api/matches/:steamId", async (req, res) => {
+  const { steamId } = req.params;
+  const page = parseInt(req.query.page as string || "1");
+  const limit = parseInt(req.query.limit as string || "20");
+  const skip = (page - 1) * limit;
+
+  try {
+    const STEAM_ID_BASE = BigInt("76561197960265728");
+    const accountId = String(BigInt(steamId) - STEAM_ID_BASE);
+
+    const cacheKey = `matches:${steamId}:${page}`;
+    const cachedData = await redisClient.get(cacheKey);
+    if (cachedData) return res.json(JSON.parse(cachedData));
+
+    const response = await axios.get(
+      `https://api.opendota.com/api/players/${accountId}/matches`,
+      { params: { limit: 100 }, timeout: 45000 }
+    );
+
+    const allMatches = response.data;
+    const result = {
+      matches: allMatches.slice(skip, skip + limit),
+      totalPages: Math.ceil(allMatches.length / limit),
+      currentPage: page,
+      totalMatches: allMatches.length,
+    };
+
+    await redisClient.setEx(cacheKey, 600, JSON.stringify(result));
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch matches" });
   }
 });
 
-app.get(
-  "/api/matches/:steamId",
-  async (
-    req: express.Request<
-      { steamId: string },
-      {},
-      {},
-      { page?: string; limit?: string }
-    >,
-    res
-  ) => {
-    const steamId = req.params.steamId;
-    const page = parseInt(req.query.page || "1");
-    const limit = parseInt(req.query.limit || "20");
+app.get("/api/match/:matchId", async (req, res) => {
+  const { matchId } = req.params;
+  const cacheKey = `match:${matchId}`;
+
+  try {
+    console.log(`[DEBUG] Fetching match details for ID: ${matchId}`);
+    const cachedMatch = await redisClient.get(cacheKey);
+    if (cachedMatch) {
+      const data = JSON.parse(cachedMatch);
+      if (data.players && data.players.length > 0) {
+        console.log(`[DEBUG] Match ${matchId} found in cache with ${data.players.length} players.`);
+        return res.json(data);
+      }
+      console.log(`[DEBUG] Match ${matchId} in cache is incomplete, re-fetching...`);
+      await redisClient.del(cacheKey);
+    }
+
+    console.log(`[DEBUG] Requesting full match data from OpenDota API for ${matchId}...`);
+    // Для про-матчей иногда лучше НЕ использовать сжатие, если сервер OpenDota обрывает соединение при попытке сжать огромный файл
+    const response = await axios.get(
+      `https://api.opendota.com/api/matches/${matchId}`,
+      { 
+        timeout: 180000, // Увеличиваем до 3 минут
+        headers: { 
+          'Accept-Encoding': 'identity', // Просим данные без сжатия, чтобы серверу было проще их отдавать по частям
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      }
+    );
+
+    if (!response.data || !response.data.players) {
+      console.error(`[ERROR] OpenDota returned match data for ${matchId} but players array is missing!`);
+      return res.status(404).json({ error: "Match data is incomplete. OpenDota might still be parsing this pro match." });
+    }
+
+    console.log(`[DEBUG] Successfully received ${response.data.players.length} players for match ${matchId}. Caching...`);
+    await redisClient.setEx(cacheKey, 86400, JSON.stringify(response.data));
+    res.json(response.data);
+  } catch (err: any) {
+    console.error(`[CRITICAL ERROR] Match ${matchId} fetch failed:`, {
+      message: err.message,
+      status: err.response?.status,
+      code: err.code,
+      url: err.config?.url
+    });
+    
+    if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+      return res.status(504).json({ error: "OpenDota API timed out. Pro matches are very large and sometimes the API is too slow to respond." });
+    }
+    
+    res.status(500).json({ error: `Failed to fetch match details: ${err.message}` });
+  }
+});
+
+// Leagues Routes - Using specific IDs to avoid heavy /leagues request
+app.get("/api/leagues", async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const leaguesPath = path.join(__dirname, '../data/leagues.json');
+    
+    if (!fs.existsSync(leaguesPath)) {
+      return res.status(404).json({ error: "Leagues data file not found" });
+    }
+
+    const page = parseInt(req.query.page as string || "1");
+    const limit = parseInt(req.query.limit as string || "21");
+    const search = (req.query.search as string || "").toLowerCase();
     const skip = (page - 1) * limit;
 
-    try {
-      if (!/^\d{17}$/.test(steamId)) {
-        return res.status(400).json({ error: "Invalid SteamID format" });
-      }
-      const STEAM_ID_BASE = BigInt("76561197960265728");
-      const accountId = String(BigInt(steamId) - STEAM_ID_BASE);
-      const cacheKey = `matches:${steamId}:page:${page}:limit:${limit}`;
+    const rawData = fs.readFileSync(leaguesPath, 'utf8');
+    const allLeagues = JSON.parse(rawData);
 
-      const cached = await redisClient.get(cacheKey);
-      if (cached !== null) {
-        console.log(
-          `Returning cached matches for SteamID: ${steamId}, Page: ${page}`
-        );
-        return res.json(JSON.parse(cached));
-      }
+    // Фильтруем по тирам (Premium + Professional) и поисковому запросу
+    let filteredLeagues = allLeagues.filter((l: any) => 
+      l && 
+      (l.tier === "premium" || l.tier === "professional") &&
+      (l.name || "").toLowerCase().includes(search)
+    );
 
-      console.log(
-        `Fetching matches from OpenDota for SteamID: ${steamId} (AccountID: ${accountId}, Page: ${page})`
-      );
-      const response = await axios.get(
-        `https://api.opendota.com/api/players/${accountId}/matches`,
-        { params: { limit: 100 }, timeout: 5000 }
-      );
-      const allMatches = response.data;
+    // Сортируем по ID (новые сверху)
+    filteredLeagues.sort((a: any, b: any) => (b.leagueid || 0) - (a.leagueid || 0));
 
-      if (!Array.isArray(allMatches)) {
-        console.log(
-          `Invalid response format for AccountID: ${accountId}`,
-          allMatches
-        );
-        return res
-          .status(500)
-          .json({ error: "Invalid response format from OpenDota" });
-      }
+    const totalPages = Math.ceil(filteredLeagues.length / limit);
+    const paginatedLeagues = filteredLeagues.slice(skip, skip + limit);
 
-      for (const match of allMatches) {
-        await Match.findOneAndUpdate(
-          { matchId: match.match_id },
-          {
-            matchId: match.match_id,
-            playerId: steamId,
-            heroId: match.hero_id,
-            duration: match.duration,
-            kills: match.kills,
-            deaths: match.deaths,
-            assists: match.assists,
-            result:
-              (match.radiant_win && match.player_slot < 128) ||
-              (!match.radiant_win && match.player_slot >= 128)
-                ? "win"
-                : "loss",
-            playedAt: new Date(match.start_time * 1000),
-          },
-          { upsert: true }
-        );
-      }
+    res.json({
+      leagues: paginatedLeagues,
+      totalPages,
+      currentPage: page,
+      totalLeagues: filteredLeagues.length
+    });
+  } catch (err: any) {
+    console.error("Leagues local error:", err.message);
+    res.status(500).json({ error: "Failed to process local leagues data" });
+  }
+});
 
-      const totalMatches = allMatches.length;
-      const totalPages = Math.ceil(totalMatches / limit);
-      const paginatedMatches = allMatches.slice(skip, skip + limit);
+app.get("/api/leagues/:leagueId", async (req, res) => {
+  const { leagueId } = req.params;
+  const cacheKey = `league:${leagueId}`;
+  try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) return res.json(JSON.parse(cached));
 
-      const result = {
-        matches: paginatedMatches,
-        totalPages,
-        currentPage: page,
-        totalMatches,
-      };
+    const response = await axios.get(`https://api.opendota.com/api/leagues/${leagueId}`, {
+      timeout: 30000
+    });
+    
+    const league = Array.isArray(response.data) ? response.data[0] : response.data;
+    if (!league) return res.status(404).json({ error: "League not found" });
 
+    await redisClient.setEx(cacheKey, 86400, JSON.stringify(league));
+    res.json(league);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch league details" });
+  }
+});
+
+app.get("/api/leagues/:leagueId/matches", async (req, res) => {
+  const { leagueId } = req.params;
+  const cacheKey = `league:${leagueId}:matches`;
+  try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) return res.json(JSON.parse(cached));
+
+    const response = await axios.get(`https://api.opendota.com/api/leagues/${leagueId}/matches`, {
+      timeout: 45000
+    });
+    
+    const matches = Array.isArray(response.data) ? response.data : [];
+    await redisClient.setEx(cacheKey, 3600, JSON.stringify(matches));
+    res.json(matches);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch league matches" });
+  }
+});
+
+app.get("/api/leagues/:leagueId/teams", async (req, res) => {
+  const { leagueId } = req.params;
+  const cacheKey = `league:${leagueId}:teams`;
+  try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) return res.json(JSON.parse(cached));
+
+    const response = await axios.get(`https://api.opendota.com/api/leagues/${leagueId}/teams`, {
+      timeout: 45000
+    });
+    
+    const teams = Array.isArray(response.data) ? response.data : [];
+    await redisClient.setEx(cacheKey, 86400, JSON.stringify(teams));
+    res.json(teams);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch league teams" });
+  }
+});
+
+app.get("/api/search", async (req, res) => {
+  const { query } = req.query;
+  if (!query) return res.status(400).json({ error: "Query required" });
+
+  try {
+    const accountId = String(query).trim();
+    const cacheKey = `search:${accountId}`;
+    const cachedSearch = await redisClient.get(cacheKey);
+    if (cachedSearch) return res.json(JSON.parse(cachedSearch));
+
+    const response = await axios.get(
+      `https://api.opendota.com/api/players/${accountId}`,
+      { timeout: 20000 }
+    );
+
+    if (response.data && response.data.profile) {
+      const result = [{
+        steamId: String(BigInt(accountId) + BigInt("76561197960265728")),
+        displayName: response.data.profile.personaname,
+        avatar: response.data.profile.avatarfull,
+      }];
       await redisClient.setEx(cacheKey, 3600, JSON.stringify(result));
-      console.log(
-        `Cached ${paginatedMatches.length} matches for SteamID: ${steamId}, Page: ${page}`
-      );
-      res.json(result);
-    } catch (err: any) {
-      console.error(`Error fetching matches for SteamID: ${steamId}`, {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
-      res
-        .status(500)
-        .json({ error: "Failed to fetch matches", details: err.message });
+      return res.json(result);
     }
+    res.status(404).json({ error: "Player not found" });
+  } catch (err: any) {
+    res.status(500).json({ error: "Search failed" });
   }
-);
-
-app.get(
-  "/api/match/:matchId",
-  async (req: express.Request<{ matchId: string }>, res) => {
-    const { matchId } = req.params;
-    try {
-      if (!/^\d+$/.test(matchId)) {
-        return res.status(400).json({ error: "Invalid Match ID format" });
-      }
-      const cacheKey = `match:${matchId}`;
-      const cached = await redisClient.get(cacheKey);
-      if (cached) {
-        console.log(`Returning cached match data for MatchID: ${matchId}`);
-        return res.json(JSON.parse(cached));
-      }
-
-      console.log(`Fetching match data from OpenDota for MatchID: ${matchId}`);
-      const response = await axios.get(
-        `https://api.opendota.com/api/matches/${matchId}`,
-        { timeout: 5000 }
-      );
-      const match = response.data;
-      if (!match.match_id) {
-        console.log(`Invalid match data for MatchID: ${matchId}`);
-        return res
-          .status(500)
-          .json({ error: "Invalid match data from OpenDota" });
-      }
-
-      await redisClient.setEx(cacheKey, 3600, JSON.stringify(match));
-      console.log(`Cached match data for MatchID: ${matchId}`);
-      res.json(match);
-    } catch (err: any) {
-      console.error(`Error fetching match data for MatchID: ${matchId}`, {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
-      res
-        .status(500)
-        .json({ error: "Failed to fetch match data", details: err.message });
-    }
-  }
-);
-
-app.get(
-  "/api/search",
-  async (req: express.Request<{}, {}, {}, { query: string }>, res) => {
-    const { query } = req.query;
-    if (!query) {
-      return res.status(400).json({ error: "Query is required" });
-    }
-
-    try {
-      const queryStr = String(query).trim();
-      console.log(`Processing query (AccountID): ${queryStr}`);
-      const cacheKey = `search:${queryStr.toLowerCase()}`;
-      const cached = await redisClient.get(cacheKey);
-      if (cached) {
-        console.log(`Returning cached search for AccountID: ${queryStr}`);
-        return res.json(JSON.parse(cached));
-      }
-
-      const STEAM_ID_BASE = BigInt("76561197960265728");
-      let result: any = null;
-
-      // Поиск только по AccountID
-      if (/^\d+$/.test(queryStr)) {
-        const accountId = queryStr;
-        const steamId = String(BigInt(accountId) + STEAM_ID_BASE);
-        console.log(`Searching AccountID: ${accountId}, SteamID: ${steamId}`);
-
-        try {
-          const response = await axios.get(
-            `https://api.opendota.com/api/players/${accountId}`,
-            { timeout: 5000 }
-          );
-          console.log(
-            `OpenDota response status: ${response.status}, data:`,
-            response.data
-          );
-          if (response.data && response.data.profile) {
-            result = [
-              {
-                steamId,
-                displayName:
-                  response.data.profile.personaname || `Player ${accountId}`,
-                avatar: response.data.profile.avatar || null,
-              },
-            ];
-            await User.updateOne(
-              { steamId },
-              {
-                steamId,
-                displayName:
-                  response.data.profile.personaname || `Player ${accountId}`,
-                avatar: response.data.profile.avatar || null,
-              },
-              { upsert: true }
-            );
-            console.log(`Saved profile to MongoDB for SteamID: ${steamId}`);
-          } else {
-            console.log(
-              `No valid profile found in OpenDota for AccountID: ${accountId}`
-            );
-          }
-        } catch (err: any) {
-          console.error(`OpenDota error for AccountID: ${accountId}`, {
-            status: err.response?.status,
-            message: err.message,
-            data: err.response?.data,
-          });
-        }
-      }
-
-      if (!result || (Array.isArray(result) && result.length === 0)) {
-        console.log(`No players found for AccountID: ${queryStr}`);
-        return res.status(404).json({ error: "Player not found" });
-      }
-
-      await redisClient.setEx(cacheKey, 3600, JSON.stringify(result));
-      console.log(`Search result cached for AccountID: ${queryStr}`);
-      res.json(result);
-    } catch (err: any) {
-      console.error("Search error:", {
-        message: err.message,
-        stack: err.stack,
-      });
-      res
-        .status(500)
-        .json({ error: "Failed to search player", details: err.message });
-    }
-  }
-);
+});
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);

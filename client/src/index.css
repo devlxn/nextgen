@@ -3,99 +3,73 @@
 @tailwind utilities;
 
 @layer base {
-  @font-face {
-    font-family: "Orbitron";
-    src: url("https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap")
-      format("woff2");
-  }
-  @font-face {
-    font-family: "Segoe UI";
-    src: url("https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap")
-      format("woff2");
-  }
-}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@700&display=swap');
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
-  color: #333333;
-  font-family: "Segoe UI", sans-serif;
-  overflow-x: hidden;
-  @apply transition-colors duration-200;
-}
+  body {
+    margin: 0;
+    min-height: 100vh;
+    @apply bg-slate-50 text-slate-900 font-sans transition-colors duration-200;
+  }
 
-body.dark {
-  background: linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 100%);
-  color: #ffffff;
+  body.dark {
+    @apply bg-gaming-black text-slate-100;
+    background-image: radial-gradient(circle at top right, rgba(124, 58, 237, 0.1), transparent),
+                      radial-gradient(circle at bottom left, rgba(244, 63, 94, 0.05), transparent);
+  }
 }
 
 @layer components {
-  .metro-card {
-    @apply bg-white dark:bg-gray-900 rounded-lg p-4 border border-gray-300 dark:border-gray-800 shadow-lg;
+  /* Glassmorphism Card */
+  .app-card {
+    @apply bg-white dark:bg-gaming-dark/60 border border-slate-200 dark:border-gaming-border/40 rounded-2xl p-5 shadow-minimal dark:shadow-glass backdrop-blur-md transition-all duration-300;
   }
 
-  .metro-button {
-    @apply bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200;
+  .app-card:hover {
+    @apply dark:border-brand-primary/60 dark:shadow-neon-purple;
   }
 
-  .metro-input {
-    @apply bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500;
+  /* Neon Button */
+  .app-button {
+    @apply bg-brand-primary hover:bg-brand-secondary text-white font-bold px-6 py-2.5 rounded-xl shadow-lg hover:shadow-neon-purple transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none;
   }
 
-  .metro-nav-button {
-    @apply px-3 py-1 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200;
+  .app-button-secondary {
+    @apply bg-transparent border-2 border-brand-primary text-brand-primary hover:bg-brand-primary hover:text-white px-6 py-2 rounded-xl transition-all duration-300;
   }
 
-  .metro-nav-button.active {
-    @apply bg-blue-600 text-white;
+  /* Minimal Input */
+  .app-input {
+    @apply bg-white dark:bg-gaming-muted/50 border border-slate-200 dark:border-gaming-border/30 text-slate-900 dark:text-slate-100 px-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all duration-300;
   }
 
-  .metro-footer {
-    @apply bg-white dark:bg-gray-900 p-4 border-t border-gray-300 dark:border-gray-800 text-center;
+  /* Navigation Link */
+  .nav-link {
+    @apply px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-brand-primary dark:hover:text-brand-primary hover:bg-brand-primary/5 transition-all duration-300;
+  }
+  
+  .nav-link.active {
+    @apply text-brand-primary dark:text-brand-primary bg-brand-primary/10 shadow-sm;
   }
 
-  .metro-footer a {
-    @apply text-blue-600 dark:text-blue-400 hover:underline;
+  /* Typography */
+  .heading-display {
+    @apply font-display tracking-wider uppercase;
   }
 
-  .hitech-card {
-    @apply metro-card bg-gradient-to-br from-gray-200 dark:from-gray-800 to-gray-300 dark:to-gray-900 border-neon;
+  /* Старые классы для обратной совместимости */
+  .metro-card { 
+    @apply bg-white dark:bg-gaming-dark/60 border border-slate-200 dark:border-gaming-border/40 rounded-2xl p-5 shadow-minimal dark:shadow-glass backdrop-blur-md transition-all duration-300;
   }
-
-  .hitech-button {
-    @apply metro-button bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:from-blue-800 active:to-purple-800 text-white shadow-neon;
+  .metro-button { 
+    @apply bg-brand-primary hover:bg-brand-secondary text-white font-bold px-6 py-2.5 rounded-xl shadow-lg hover:shadow-neon-purple transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none;
   }
-
-  .hitech-header {
-    @apply text-3xl font-[Orbitron] text-blue-600 dark:text-blue-400 mb-4 text-center neon-text;
+  .metro-input { 
+    @apply bg-white dark:bg-gaming-muted/50 border border-slate-200 dark:border-gaming-border/30 text-slate-900 dark:text-slate-100 px-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all duration-300;
   }
-
-  .neon-text {
-    @apply text-transparent bg-clip-text animate-pulse;
-    background: linear-gradient(90deg, #00ffff 0%, #ff00ff 100%);
-    -webkit-background-clip: text;
+  .metro-nav-button { 
+    @apply px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-brand-primary dark:hover:text-brand-primary hover:bg-brand-primary/5 transition-all duration-300;
   }
-
-  .border-neon {
-    @apply border-2 border-blue-500 dark:border-blue-400;
+  .metro-nav-button.active { 
+    @apply text-brand-primary dark:text-brand-primary bg-brand-primary/10 shadow-sm;
   }
-
-  .shadow-neon {
-    @apply shadow-[0_0_10px_#00ffff,0_0_20px_#ff00ff] dark:shadow-[0_0_10px_#00ccff,0_0_20px_#cc00ff];
-  }
-}
-
-/* Удаляем неоновые анимации, если были */
-.text-neon-blue,
-.text-neon-pink,
-.bg-neon-blue,
-.bg-neon-pink {
-  all: unset;
-}
-
-/* Стили для текста KDA */
-.text-2xl {
-  word-break: break-all;
-  max-width: 100%;
 }

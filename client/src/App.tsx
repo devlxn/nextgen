@@ -14,7 +14,10 @@ import Matches from "./pages/Matches";
 import Search from "./pages/Search";
 import Heroes from "./pages/Heroes";
 import MatchDetails from "./pages/MatchDetails";
-import ProTeams from "./pages/ProTeams"; // Импортируем новый компонент
+import ProTeams from "./pages/ProTeams";
+import HeroMatchups from "./pages/HeroMatchups";
+import Leagues from "./pages/Leagues";
+import LeagueDetails from "./pages/LeagueDetails";
 
 interface User {
   steamId: string;
@@ -22,257 +25,145 @@ interface User {
   avatar: string;
 }
 
+const API_URL = "http://localhost:5000";
+
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     axios
-      .get("http://localhost:5000/api/user", { withCredentials: true })
+      .get(`${API_URL}/api/user`, { withCredentials: true })
       .then((res) => {
         setUser(res.data || null);
         setLoading(false);
       })
-      .catch((err) => {
-        console.error("Error fetching user:", err);
+      .catch(() => {
         setUser(null);
         setLoading(false);
       });
   }, []);
 
-  if (loading) {
-    return <div className="text-center p-4">Loading...</div>;
-  }
-
+  if (loading) return <div className="min-h-screen bg-white dark:bg-[#0F0F23] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"></div></div>;
   return user ? children : <Navigate to="/" replace />;
 }
 
 function MainApp() {
   const [user, setUser] = useState<User | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem("theme") || "light"
-  );
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    axios
-      .get("http://localhost:5000/api/user", { withCredentials: true })
-      .then((res) => {
-        setUser(res.data || null);
-        setError(null);
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error("Error fetching user:", message);
-        setError(`Failed to fetch user: ${message}`);
-        setUser(null);
-      });
-
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-    document.body.classList.toggle("dark", savedTheme === "dark");
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      await axios.get("http://localhost:5000/auth/logout", {
-        withCredentials: true,
-      });
-      setUser(null);
-      navigate("/");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error("Logout error:", message);
-      setError(`Failed to logout: ${message}`);
-      setUser(null);
+    axios.get(`${API_URL}/api/user`, { withCredentials: true })
+      .then((res) => setUser(res.data || null))
+      .catch(() => setUser(null));
+    
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+      document.body.style.backgroundColor = "#0F0F23";
+    } else {
+      document.documentElement.classList.remove("dark");
+      document.body.style.backgroundColor = "#f8fafc";
     }
-  };
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.body.classList.toggle("dark", newTheme === "dark");
+    setTheme(prev => prev === "dark" ? "light" : "dark");
   };
 
-  if (error) {
-    return (
-      <div className="container mx-auto p-4 text-center">
-        <h1 className="text-xl text-red-500">{error}</h1>
-        <button
-          onClick={() => {
-            setError(null);
-            axios
-              .get("http://localhost:5000/api/user", { withCredentials: true })
-              .then((res) => setUser(res.data || null))
-              .catch((err) => setError(err.message));
-          }}
-          className="metro-button mt-2"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
+  const navItems = [
+    { label: "SEARCH", path: "/search" },
+    { label: "HEROES", path: "/heroes" },
+    { label: "PRO TEAMS", path: "/pro-teams" },
+    { label: "TOURNAMENTS", path: "/leagues" },
+  ];
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="bg-gray-100 dark:bg-gray-900 p-4 border-b border-gray-200 dark:border-gray-800">
-        <nav className="max-w-7xl mx-auto flex justify-between items-center">
-          <Link
-            to="/"
-            className="text-lg font-semibold text-blue-600 hover:text-blue-800"
-          >
-            Dota 2 Tracker
-          </Link>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate("/search")}
-              className={`metro-nav-button ${
-                location.pathname === "/search" ? "active" : ""
-              }`}
-            >
-              Search
-            </button>
-            <button
-              onClick={() => navigate("/profile")}
-              className={`metro-nav-button ${
-                location.pathname === "/profile" ? "active" : ""
-              }`}
-              disabled={!user}
-            >
-              Profile
-            </button>
-            <button
-              onClick={() => navigate("/matches")}
-              className={`metro-nav-button ${
-                location.pathname === "/matches" ? "active" : ""
-              }`}
-              disabled={!user}
-            >
-              Matches
-            </button>
-            <button
-              onClick={() => navigate("/heroes")}
-              className={`metro-nav-button ${
-                location.pathname === "/heroes" ? "active" : ""
-              }`}
-            >
-              Heroes
-            </button>
-            <button
-              onClick={() => navigate("/pro-teams")} // Добавлена кнопка для ProTeams
-              className={`metro-nav-button ${
-                location.pathname === "/pro-teams" ? "active" : ""
-              }`}
-            >
-              Pro Teams
-            </button>
-            <button
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0F0F23] text-slate-900 dark:text-white font-sans selection:bg-purple-500/30 transition-colors duration-300">
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-[#0F0F23]/80 backdrop-blur-2xl border-b border-slate-200 dark:border-purple-500/20">
+        <nav className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-12">
+            <Link to="/" className="text-3xl font-black tracking-tighter bg-gradient-to-r from-purple-600 to-pink-500 dark:from-purple-400 dark:to-pink-500 bg-clip-text text-transparent hover:scale-105 transition-transform">
+              DOTAW
+            </Link>
+            <div className="hidden md:flex gap-6">
+              {navItems.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`text-sm font-bold tracking-widest hover:text-purple-500 transition-colors ${location.pathname.startsWith(item.path) ? "text-purple-600 dark:text-purple-500" : "text-slate-500 dark:text-gray-400"}`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 sm:gap-6">
+            <button 
               onClick={toggleTheme}
-              className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"
-              aria-label="Toggle theme"
+              className="p-2 rounded-xl bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 transition-colors text-xl"
+              title="Toggle Theme"
             >
-              {theme === "light" ? "🌙" : "☀️"}
+              {theme === "dark" ? "🌙" : "☀️"}
             </button>
-            {user ? (
-              <button
-                onClick={handleLogout}
-                className="metro-button bg-red-500 hover:bg-red-600"
-              >
-                Logout
-              </button>
-            ) : (
-              <a
-                href="http://localhost:5000/auth/steam"
-                className="metro-button"
-              >
-                Login with Steam
+
+	            {user ? (
+	              <Link to="/profile" className="flex items-center gap-4 hover:opacity-80 transition-all group">
+	                <img src={user.avatar} className="w-10 h-10 rounded-full border-2 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)] group-hover:shadow-purple-500/60 transition-all" alt="avatar" />
+	                <span className="font-bold text-sm hidden sm:block group-hover:text-purple-500 transition-colors">{user.displayName}</span>
+	              </Link>
+	            ) : (
+              <a href={`${API_URL}/auth/steam`} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all active:scale-95">
+                LOGIN
               </a>
             )}
           </div>
         </nav>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 flex-grow">
+      <main>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <div className="text-center">
-                <div className="relative">
-                  <img
-                    src="https://wallpapercave.com/uwp/uwp4650294.jpeg"
-                    alt="Dota 2 Background"
-                    className="w-full h-48 object-cover rounded-lg"
-                  />
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                    <div>
-                      <h1 className="text-2xl font-semibold text-white">
-                        Welcome to Dota 2 Tracker
-                      </h1>
-                      <p className="text-md text-gray-200 mt-1">
-                        Track your matches, analyze stats, and explore heroes!
-                      </p>
-                      <button
-                        onClick={() => navigate("/search")}
-                        className="metro-button mt-2 inline-block"
-                      >
-                        Start Searching
-                      </button>
-                    </div>
-                  </div>
+          <Route path="/" element={
+            <div className="relative min-h-[calc(100vh-80px)] flex items-center justify-center overflow-hidden px-6">
+              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse"></div>
+              <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-600/10 rounded-full blur-[120px] animate-pulse delay-700"></div>
+              
+              <div className="relative z-10 text-center max-w-4xl">
+                <h1 className="text-6xl sm:text-8xl font-black mb-8 leading-none tracking-tight text-slate-900 dark:text-white">
+                  MASTER THE <br />
+                  <span className="bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 dark:from-purple-400 dark:via-pink-500 dark:to-red-500 bg-clip-text text-transparent">BATTLEFIELD</span>
+                </h1>
+                <p className="text-xl text-slate-600 dark:text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+                  Advanced analytics for Dota 2. Track your MMR, analyze match history, and dominate your games with professional-grade statistics.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-6 justify-center">
+                  <button onClick={() => navigate("/search")} className="bg-slate-900 dark:bg-white text-white dark:text-black px-12 py-4 rounded-2xl font-black text-lg hover:bg-purple-600 dark:hover:bg-purple-500 hover:text-white transition-all shadow-2xl hover:shadow-purple-500/40 active:scale-95">
+                    START TRACKING
+                  </button>
+                  <button onClick={() => navigate("/leagues")} className="bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 backdrop-blur-md px-12 py-4 rounded-2xl font-black text-lg hover:bg-slate-300 dark:hover:bg-white/10 transition-all active:scale-95 text-slate-900 dark:text-white">
+                    VIEW TOURNAMENTS
+                  </button>
                 </div>
               </div>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/matches"
-            element={
-              <ProtectedRoute>
-                <Matches />
-              </ProtectedRoute>
-            }
-          />
+            </div>
+          } />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/matches" element={<Matches />} />
           <Route path="/search" element={<Search />} />
           <Route path="/heroes" element={<Heroes />} />
           <Route path="/match/:matchId" element={<MatchDetails />} />
-          <Route path="/pro-teams" element={<ProTeams />} />{" "}
-          {/* Новый маршрут */}
+          <Route path="/pro-teams" element={<ProTeams />} />
+          <Route path="/leagues" element={<Leagues />} />
+          <Route path="/leagues/:leagueId" element={<LeagueDetails />} />
+          <Route path="/heroes/:heroId/matchups" element={<HeroMatchups />} />
         </Routes>
       </main>
 
-      <footer className="metro-footer">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-sm">
-            © 2025 Dota 2 Tracker. All rights reserved. Powered by{" "}
-            <a href="https://x.ai" target="_blank" rel="noopener noreferrer">
-              xAI
-            </a>
-            .
-          </p>
-          <div className="mt-2">
-            <a href="/about" className="mr-4">
-              About
-            </a>
-            <a href="/contact" className="mr-4">
-              Contact
-            </a>
-            <a href="/privacy" className="mr-4">
-              Privacy
-            </a>
-          </div>
-        </div>
+      <footer className="py-20 border-t border-slate-200 dark:border-white/5 text-center">
+        <p className="text-slate-400 dark:text-gray-600 text-sm font-bold tracking-widest uppercase">© 2026 DOTAW TRACKER • POWERED BY OPENDOTA API</p>
       </footer>
     </div>
   );

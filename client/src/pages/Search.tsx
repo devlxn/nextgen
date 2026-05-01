@@ -1,18 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { heroes } from "../data/heroes";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-
-interface Match {
-  match_id: number;
-  hero_id: number;
-  duration: number;
-  kills: number;
-  deaths: number;
-  assists: number;
-  radiant_win: boolean;
-  player_slot: number;
-}
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 interface Player {
   steamId: string;
@@ -21,400 +9,175 @@ interface Player {
   rankTier?: number;
 }
 
-function Search() {
+const API_URL = "http://localhost:5000";
+
+const Search = () => {
   const [query, setQuery] = useState("");
-  const [player, setPlayer] = useState<Player | null>(null);
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [results, setResults] = useState<Player[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const convertSteamIdToAccountId = (steamId: string): string => {
     const STEAM_ID_BASE = BigInt("76561197960265728");
     try {
-      const accountId = BigInt(steamId) - STEAM_ID_BASE;
-      return accountId.toString();
+      return (BigInt(steamId) - STEAM_ID_BASE).toString();
     } catch (e) {
-      throw new Error("Invalid SteamID format");
+      return "";
     }
   };
 
-  const isValidSteamId = (id: string): boolean => {
-    return /^(7656119[0-9]{10})$/.test(id);
-  };
+  const isValidSteamId = (id: string): boolean => /^(7656119[0-9]{10})$/.test(id);
+  const isValidAccountId = (id: string): boolean => /^\d+$/.test(id) && Number(id) > 0;
 
-  const isValidAccountId = (id: string): boolean => {
-    return /^\d+$/.test(id) && Number(id) > 0;
-  };
-
-  const getRankName = (rankTier: number | undefined) => {
-    if (!rankTier) return "Unranked";
-    const tier = Math.floor(rankTier / 10);
-    const subTier = rankTier % 10;
-    const ranks = [
-      "Herald",
-      "Guardian",
-      "Crusader",
-      "Archon",
-      "Legend",
-      "Ancient",
-      "Divine",
-      "Immortal",
-    ];
-    return `${ranks[tier - 1]} ${subTier}` || "Unranked";
-  };
-
-  // Автоматическая загрузка данных при наличии steamId в URL
-  useEffect(() => {
-    const steamIdFromUrl = searchParams.get("steamId");
-    if (steamIdFromUrl && isValidSteamId(steamIdFromUrl)) {
-      setLoading(true);
-      setError("");
-      setPlayer(null);
-      setMatches([]);
-      setPage(1);
-
-      const fetchPlayerData = async () => {
-        try {
-          const accountId = convertSteamIdToAccountId(steamIdFromUrl);
-          const response = await axios.get(
-            `http://localhost:5000/api/search?query=${accountId}`,
-            { withCredentials: true }
-          );
-          const data = response.data;
-
-          if (data && data.length === 1) {
-            const playerData = data[0];
-            const rankResponse = await axios.get(
-              `https://api.opendota.com/api/players/${accountId}`
-            );
-            const rankTier = rankResponse.data?.rank_tier;
-            setPlayer({ ...playerData, rankTier });
-            await fetchMatches(playerData.steamId, 1);
-          } else {
-            setError("Player not found with the provided SteamID");
-          }
-        } catch (err: unknown) {
-          const message =
-            err instanceof Error ? err.message : "Failed to fetch player data";
-          setError(`Error: ${message}`);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchPlayerData();
-    }
-  }, [searchParams]); // Зависимость от searchParams для перезагрузки при изменении URL
-
-  const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!query.trim()) return;
+  const handleSearch = async (e?: React.FormEvent, searchId?: string) => {
+    if (e) e.preventDefault();
+    const idToSearch = searchId || query.trim();
+    if (!idToSearch) return;
 
     setLoading(true);
-    setError("");
-    setPlayer(null);
-    setMatches([]);
-    setPage(1);
-
+    setError(null);
     try {
-      const inputId = query.trim();
-      let accountId: string;
-
-      if (isValidSteamId(inputId)) {
-        accountId = convertSteamIdToAccountId(inputId);
-      } else if (isValidAccountId(inputId)) {
-        accountId = inputId;
-      } else {
-        setError(
-          "Please enter a valid SteamID (e.g., 76561197960265728) or AccountID (e.g., 123456789)"
-        );
-        return;
+      let accountId = idToSearch;
+      if (isValidSteamId(idToSearch)) {
+        accountId = convertSteamIdToAccountId(idToSearch);
+      } else if (!isValidAccountId(idToSearch)) {
+        throw new Error("Invalid ID format. Use SteamID or AccountID.");
       }
 
-      const response = await axios.get(
-        `http://localhost:5000/api/search?query=${accountId}`,
-        { withCredentials: true }
-      );
+      const response = await axios.get(`${API_URL}/api/search`, {
+        params: { query: accountId },
+      });
+      
       const data = response.data;
-
-      if (!data || !data.length) {
-        setError("Player not found with the provided ID");
-      } else if (data.length === 1) {
-        const playerData = data[0];
-        const rankResponse = await axios.get(
-          `https://api.opendota.com/api/players/${accountId}`
-        );
-        const rankTier = rankResponse.data?.rank_tier;
-        setPlayer({ ...playerData, rankTier });
-        await fetchMatches(playerData.steamId, 1);
-        navigate(`?steamId=${playerData.steamId}`);
+      if (Array.isArray(data)) {
+        setResults(data);
       } else {
-        setError("Unexpected response format");
+        setResults([]);
       }
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to search player";
-      console.error("Search error:", err);
-      setError(`Error: ${message}`);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || "Player not found.");
+      setResults([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMatches = async (steamId: string, page: number) => {
-    try {
-      const response = await axios.get(
-        `http://localhost:5000/api/matches/${steamId}`,
-        {
-          params: { page, limit: 20 },
-          withCredentials: true,
-        }
-      );
-      setMatches(response.data.matches);
-      setTotalPages(response.data.totalPages);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to fetch matches";
-      console.error("Error fetching matches:", err);
-      setError(`Error: ${message}`);
+  useEffect(() => {
+    const steamId = searchParams.get("steamId");
+    if (steamId) {
+      handleSearch(undefined, steamId);
     }
-  };
-
-  const clearSearch = () => {
-    setQuery("");
-    setPlayer(null);
-    setMatches([]);
-    setError("");
-    setPage(1);
-    navigate("/search");
-  };
-
-  const stats = matches.reduce(
-    (acc, match) => {
-      const isWin =
-        (match.radiant_win && match.player_slot < 128) ||
-        (!match.radiant_win && match.player_slot >= 128);
-      return {
-        totalMatches: acc.totalMatches + 1,
-        wins: acc.wins + (isWin ? 1 : 0),
-        kills: acc.kills + match.kills,
-        deaths: acc.deaths + match.deaths,
-        assists: acc.assists + match.assists,
-      };
-    },
-    { totalMatches: 0, wins: 0, kills: 0, deaths: 0, assists: 0 }
-  );
-
-  const winRate = stats.totalMatches
-    ? ((stats.wins / stats.totalMatches) * 100).toFixed(2)
-    : "0.00";
-  const avgKDA = stats.totalMatches
-    ? `${(stats.kills / stats.totalMatches).toFixed(2)}/${(
-        stats.deaths / stats.totalMatches
-      ).toFixed(2)}/${(stats.assists / stats.totalMatches).toFixed(2)}`
-    : "0/0/0";
-
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages) return;
-    setPage(newPage);
-    if (player) fetchMatches(player.steamId, newPage);
-  };
+  }, [searchParams]);
 
   return (
-    <div className="min-h-screen p-4">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-semibold text-blue-600 mb-2 text-center">
-          Player Search
+    <div className="max-w-5xl mx-auto px-4 py-12 sm:py-20">
+      <div className="text-center mb-16">
+        <h1 className="text-4xl sm:text-6xl font-black heading-display mb-6 bg-gradient-to-r from-purple-600 via-pink-500 to-brand-accent dark:from-brand-primary dark:via-brand-secondary dark:to-brand-accent bg-clip-text text-transparent">
+          PLAYER SEARCH
         </h1>
-        <p className="text-center mb-2 text-gray-600 dark:text-gray-400">
-          Enter SteamID (e.g., 76561197960265728) or AccountID (e.g.,
-          123456789).
+        <p className="text-slate-500 dark:text-slate-400 text-lg max-w-xl mx-auto">
+          Enter SteamID or AccountID to analyze performance and match history.
         </p>
-        <form onSubmit={handleSearch} className="flex gap-2 mb-2 relative">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Enter SteamID or AccountID"
-            className="metro-input flex-1"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              className="absolute right-12 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
-          )}
-          <button type="submit" disabled={loading} className="metro-button">
-            {loading ? "Searching..." : "Search"}
-          </button>
-        </form>
-        {loading && (
-          <div className="flex justify-center mb-2">
-            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-        {error && (
-          <p className="text-center text-red-500 dark:text-red-400 mb-2">
-            {error}
-          </p>
-        )}
-        {player && (
-          <div className="mb-4">
-            <div className="metro-card flex items-center gap-2 mb-2 p-2">
-              <img
-                src={player.avatar || "https://via.placeholder.com/50"}
-                alt={player.displayName}
-                className="w-12 h-12 rounded"
-              />
-              <div>
-                <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  {player.displayName}
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  SteamID: {player.steamId}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Rank: {getRankName(player.rankTier)}
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-              <div className="metro-card bg-blue-100 dark:bg-blue-900">
-                <h3 className="text-md font-medium text-blue-700 dark:text-blue-300">
-                  Total Matches
-                </h3>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {stats.totalMatches}
-                </p>
-              </div>
-              <div className="metro-card bg-green-100 dark:bg-green-900">
-                <h3 className="text-md font-medium text-green-700 dark:text-green-300">
-                  Wins
-                </h3>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {stats.wins}
-                </p>
-              </div>
-              <div className="metro-card bg-yellow-100 dark:bg-yellow-900">
-                <h3 className="text-md font-medium text-yellow-700 dark:text-yellow-300">
-                  Win Rate
-                </h3>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {winRate}%
-                </p>
-              </div>
-              <div className="metro-card bg-red-100 dark:bg-red-900">
-                <h3 className="text-md font-medium text-red-700 dark:text-red-300">
-                  Average KDA
-                </h3>
-                <p className="text-lg text-gray-900 dark:text-gray-100">
-                  {avgKDA}
-                </p>
-              </div>
-            </div>
-            {matches.length > 0 && (
-              <div>
-                <h3 className="text-lg font-medium text-blue-600 mb-2">
-                  Matches
-                </h3>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {matches.map((match) => {
-                    const hero = heroes.find((h) => h.id === match.hero_id);
-                    return (
-                      <Link
-                        key={match.match_id}
-                        to={`/match/${match.match_id}?steamId=${player.steamId}`}
-                        className="metro-card bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
-                      >
-                        <div className="flex items-center gap-2 p-2">
-                          {hero && (
-                            <img
-                              src={`https://cdn.dota2.com/apps/dota2/images/heroes/${hero.name.replace(
-                                "npc_dota_hero_",
-                                ""
-                              )}_icon.png`}
-                              alt={hero.localized_name}
-                              className="w-6 h-6 object-contain"
-                            />
-                          )}
-                          <p className="text-gray-900 dark:text-gray-100">
-                            Hero:{" "}
-                            {hero?.localized_name ||
-                              `Unknown (${match.hero_id})`}
-                          </p>
-                        </div>
-                        <p className="text-gray-600 dark:text-gray-400 p-2">
-                          Duration: {Math.floor(match.duration / 60)}:
-                          {(match.duration % 60).toString().padStart(2, "0")}
-                        </p>
-                        <p className="text-gray-600 dark:text-gray-400 p-2">
-                          KDA: {match.kills}/{match.deaths}/{match.assists}
-                        </p>
-                        <p
-                          className={
-                            (match.radiant_win && match.player_slot < 128) ||
-                            (!match.radiant_win && match.player_slot >= 128)
-                              ? "text-green-600 dark:text-green-400 p-2"
-                              : "text-red-600 dark:text-red-400 p-2"
-                          }
-                        >
-                          Result:
-                          {" " +
-                            ((match.radiant_win && match.player_slot < 128) ||
-                            (!match.radiant_win && match.player_slot >= 128)
-                              ? "Win"
-                              : "Loss")}
-                        </p>
-                      </Link>
-                    );
-                  })}
-                </div>
-                <div className="flex justify-center gap-2 mt-2">
-                  <button
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page === 1}
-                    className="metro-button bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400"
-                  >
-                    Previous
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                    (p) => (
-                      <button
-                        key={p}
-                        onClick={() => handlePageChange(p)}
-                        className={`metro-button ${
-                          p === page
-                            ? "bg-blue-500 text-white"
-                            : "bg-gray-500 hover:bg-gray-600"
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-                  <button
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={page === totalPages}
-                    className="metro-button bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+      </div>
+
+      <div className="relative group mb-12 max-w-3xl mx-auto">
+        <div className="absolute -inset-1 bg-gradient-to-r from-brand-primary to-brand-accent rounded-2xl blur opacity-20 group-focus-within:opacity-40 transition duration-1000"></div>
+        <form onSubmit={handleSearch} className="relative flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-grow">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="SteamID or AccountID..."
+              className="app-input w-full text-lg py-4 px-6 bg-white/80 dark:bg-gaming-dark/80 backdrop-blur-xl border-2 border-slate-200 dark:border-transparent focus:border-brand-primary/50 text-slate-900 dark:text-white"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-primary transition-colors"
+              >
+                ✕
+              </button>
             )}
           </div>
-        )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="app-button px-10 text-lg flex items-center justify-center min-w-[160px] h-[60px] sm:h-auto"
+          >
+            {loading ? (
+              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              "SEARCH"
+            )}
+          </button>
+        </form>
       </div>
+
+      {error && (
+        <div className="app-card max-w-3xl mx-auto border-brand-danger/30 bg-brand-danger/5 text-brand-danger text-center py-4 mb-8 animate-in fade-in slide-in-from-top-2">
+          <span className="font-bold uppercase tracking-widest mr-2">Error:</span> {error}
+        </div>
+      )}
+
+      <div className="grid gap-6 max-w-3xl mx-auto">
+        {results.map((player, index) => (
+          <div
+            key={player.steamId}
+            onClick={() => navigate(`/matches?steamId=${player.steamId}`)}
+            className="app-card group cursor-pointer flex items-center justify-between hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 bg-white dark:bg-gaming-dark/60"
+            style={{ animationDelay: `${index * 100}ms` }}
+          >
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                <div className="absolute -inset-1 bg-brand-primary rounded-2xl blur opacity-0 group-hover:opacity-40 transition-opacity"></div>
+                <img
+                  src={player.avatar || "https://via.placeholder.com/80"}
+                  alt={player.displayName}
+                  className="relative w-20 h-20 rounded-2xl border-2 border-slate-200 dark:border-gaming-border/30 group-hover:border-brand-primary transition-colors object-cover shadow-lg"
+                />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-brand-primary transition-colors">
+                  {player.displayName}
+                </h3>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-xs font-mono bg-slate-100 dark:bg-gaming-muted/50 px-2 py-1 rounded text-slate-500 dark:text-slate-400">
+                    ID: {player.steamId}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="hidden sm:flex items-center gap-3 text-brand-primary font-bold tracking-widest text-sm opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+              ANALYZE
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {results.length === 0 && !loading && !error && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-20 max-w-4xl mx-auto">
+          {[
+            { label: "Global Search", icon: "🌐", desc: "Access millions of players" },
+            { label: "Match History", icon: "📜", desc: "Detailed game analysis" },
+            { label: "MMR Tracking", icon: "📈", desc: "Monitor your progress" },
+          ].map((feat) => (
+            <div key={feat.label} className="app-card text-center py-10 bg-white dark:bg-gaming-muted/10 border-dashed border-slate-200 dark:border-gaming-border/20 hover:border-brand-primary/40 transition-colors">
+              <div className="text-5xl mb-4 grayscale group-hover:grayscale-0 transition-all">{feat.icon}</div>
+              <div className="font-bold text-lg text-slate-800 dark:text-slate-200 mb-2">{feat.label}</div>
+              <div className="text-sm text-slate-500">{feat.desc}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-}
+};
 
 export default Search;
