@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface Player {
   steamId: string;
@@ -18,12 +19,13 @@ const Search = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { t } = useLanguage();
 
   const convertSteamIdToAccountId = (steamId: string): string => {
     const STEAM_ID_BASE = BigInt("76561197960265728");
     try {
       return (BigInt(steamId) - STEAM_ID_BASE).toString();
-    } catch (e) {
+    } catch {
       return "";
     }
   };
@@ -43,7 +45,7 @@ const Search = () => {
       if (isValidSteamId(idToSearch)) {
         accountId = convertSteamIdToAccountId(idToSearch);
       } else if (!isValidAccountId(idToSearch)) {
-        throw new Error("Invalid ID format. Use SteamID or AccountID.");
+        throw new Error(t("search.invalidId"));
       }
 
       const response = await axios.get(`${API_URL}/api/search`, {
@@ -56,8 +58,12 @@ const Search = () => {
       } else {
         setResults([]);
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || err.message || "Player not found.");
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.error || err.message || t("search.notFound"));
+      } else {
+        setError(err instanceof Error ? err.message : t("search.notFound"));
+      }
       setResults([]);
     } finally {
       setLoading(false);
@@ -75,10 +81,10 @@ const Search = () => {
     <div className="max-w-5xl mx-auto px-4 py-12 sm:py-20">
       <div className="text-center mb-16">
         <h1 className="text-4xl sm:text-6xl font-black heading-display mb-6 bg-gradient-to-r from-purple-600 via-pink-500 to-brand-accent dark:from-brand-primary dark:via-brand-secondary dark:to-brand-accent bg-clip-text text-transparent">
-          PLAYER SEARCH
+          {t("search.title")}
         </h1>
         <p className="text-slate-500 dark:text-slate-400 text-lg max-w-xl mx-auto">
-          Enter SteamID or AccountID to analyze performance and match history.
+          {t("search.subtitle")}
         </p>
       </div>
 
@@ -90,7 +96,7 @@ const Search = () => {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="SteamID or AccountID..."
+              placeholder={t("search.placeholder")}
               className="app-input w-full text-lg py-4 px-6 bg-white/80 dark:bg-gaming-dark/80 backdrop-blur-xl border-2 border-slate-200 dark:border-transparent focus:border-brand-primary/50 text-slate-900 dark:text-white"
             />
             {query && (
@@ -111,7 +117,7 @@ const Search = () => {
             {loading ? (
               <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
             ) : (
-              "SEARCH"
+              t("common.search").toUpperCase()
             )}
           </button>
         </form>
@@ -119,7 +125,7 @@ const Search = () => {
 
       {error && (
         <div className="app-card max-w-3xl mx-auto border-brand-danger/30 bg-brand-danger/5 text-brand-danger text-center py-4 mb-8 animate-in fade-in slide-in-from-top-2">
-          <span className="font-bold uppercase tracking-widest mr-2">Error:</span> {error}
+          <span className="font-bold uppercase tracking-widest mr-2">{t("common.error")}:</span> {error}
         </div>
       )}
 
@@ -127,7 +133,7 @@ const Search = () => {
         {results.map((player, index) => (
           <div
             key={player.steamId}
-            onClick={() => navigate(`/matches?steamId=${player.steamId}`)}
+            onClick={() => navigate(`/players/${player.steamId}/analytics`)}
             className="app-card group cursor-pointer flex items-center justify-between hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 bg-white dark:bg-gaming-dark/60"
             style={{ animationDelay: `${index * 100}ms` }}
           >
@@ -152,7 +158,7 @@ const Search = () => {
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-3 text-brand-primary font-bold tracking-widest text-sm opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
-              ANALYZE
+              {t("search.analyze").toUpperCase()}
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
@@ -164,9 +170,9 @@ const Search = () => {
       {results.length === 0 && !loading && !error && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-20 max-w-4xl mx-auto">
           {[
-            { label: "Global Search", icon: "🌐", desc: "Access millions of players" },
-            { label: "Match History", icon: "📜", desc: "Detailed game analysis" },
-            { label: "MMR Tracking", icon: "📈", desc: "Monitor your progress" },
+            { label: t("search.globalSearch"), icon: "GS", desc: t("search.globalSearchDesc") },
+            { label: t("search.matchHistory"), icon: "MH", desc: t("search.matchHistoryDesc") },
+            { label: t("search.mmrTracking"), icon: "MMR", desc: t("search.mmrTrackingDesc") },
           ].map((feat) => (
             <div key={feat.label} className="app-card text-center py-10 bg-white dark:bg-gaming-muted/10 border-dashed border-slate-200 dark:border-gaming-border/20 hover:border-brand-primary/40 transition-colors">
               <div className="text-5xl mb-4 grayscale group-hover:grayscale-0 transition-all">{feat.icon}</div>

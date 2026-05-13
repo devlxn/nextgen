@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { heroes } from "../data/heroes";
+import { getHeroImagePath, heroes } from "../data/heroes";
 import { Trophy, Clock, Calendar, Hash, ChevronRight, AlertCircle } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface Player {
   account_id: number;
@@ -49,6 +50,7 @@ function MatchDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchMatch = async () => {
@@ -57,8 +59,12 @@ function MatchDetails() {
       try {
         const response = await axios.get(`${API_URL}/api/match/${matchId}`);
         setMatch(response.data);
-      } catch (err: any) {
-        setError(err.response?.data?.error || err.message || "Failed to fetch match data");
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          setError(err.response?.data?.error || err.message || "Failed to fetch match data");
+        } else {
+          setError(err instanceof Error ? err.message : "Failed to fetch match data");
+        }
       } finally {
         setLoading(false);
       }
@@ -69,8 +75,8 @@ function MatchDetails() {
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-gaming-black">
       <div className="w-20 h-20 border-4 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin shadow-neon-purple mb-6"></div>
-      <p className="text-brand-primary font-black heading-display animate-pulse tracking-widest">ANALYZING BATTLE DATA...</p>
-      <p className="text-slate-500 text-xs mt-2 uppercase font-bold">Pro matches may take up to 60s to load</p>
+      <p className="text-brand-primary font-black heading-display animate-pulse tracking-widest">{t("matchDetails.analyzing")}</p>
+      <p className="text-slate-500 text-xs mt-2 uppercase font-bold">{t("matchDetails.proLoadNote")}</p>
     </div>
   );
 
@@ -78,9 +84,9 @@ function MatchDetails() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gaming-black p-4">
       <div className="app-card max-w-md text-center border-brand-danger/30 bg-white dark:bg-gaming-dark/60">
         <div className="text-5xl mb-4"><AlertCircle className="w-16 h-16 text-brand-danger mx-auto" /></div>
-        <h2 className="text-2xl font-black heading-display text-brand-danger mb-2">DATA LINK LOST</h2>
+        <h2 className="text-2xl font-black heading-display text-brand-danger mb-2">{t("matchDetails.dataLost")}</h2>
         <p className="text-slate-500 dark:text-slate-400 mb-6">{error || "Match data is incomplete or not yet parsed by OpenDota."}</p>
-        <button onClick={() => navigate(-1)} className="app-button w-full">RETURN TO BASE</button>
+        <button onClick={() => navigate(-1)} className="app-button w-full">{t("matchDetails.return")}</button>
       </div>
     </div>
   );
@@ -89,9 +95,7 @@ function MatchDetails() {
   const direPlayers = match.players.filter((p) => p.player_slot >= 128).sort((a, b) => a.player_slot - b.player_slot);
 
   const getHeroUrl = (id: number) => {
-    const hero = heroes.find(h => h.id === id);
-    const name = hero?.name.replace("npc_dota_hero_", "") || "unknown";
-    return `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${name}.png`;
+    return getHeroImagePath(id);
   };
 
   const PlayerRow = ({ player }: { player: Player }) => (
@@ -181,7 +185,7 @@ function MatchDetails() {
               <h2 className="text-2xl font-black heading-display text-brand-success uppercase italic">
                 {match.radiant_team?.name || "THE RADIANT"}
               </h2>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Radiant Side</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t("matchDetails.radiantSide")}</span>
             </div>
 
             {/* Score & Info */}
@@ -208,7 +212,7 @@ function MatchDetails() {
               <h2 className="text-2xl font-black heading-display text-brand-danger uppercase italic">
                 {match.dire_team?.name || "THE DIRE"}
               </h2>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Dire Side</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t("matchDetails.direSide")}</span>
             </div>
           </div>
         </div>
@@ -218,19 +222,19 @@ function MatchDetails() {
       <div className="mb-12">
         <div className="flex items-center gap-4 mb-4">
           <div className="w-3 h-8 bg-brand-success rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
-          <h2 className="text-2xl font-black heading-display text-brand-success uppercase italic">TEAM RADIANT</h2>
+          <h2 className="text-2xl font-black heading-display text-brand-success uppercase italic">{t("matchDetails.teamRadiant")}</h2>
         </div>
         <div className="app-card p-0 overflow-hidden border-brand-success/20 bg-white dark:bg-gaming-dark/60">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-brand-success/5 text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-brand-success/10">
-                  <th className="py-4 pl-4">Hero / Player</th>
+                  <th className="py-4 pl-4">{t("matchDetails.heroPlayer")}</th>
                   <th className="text-center">K / D / A</th>
                   <th className="text-center">KDA</th>
                   <th className="text-center">GPM</th>
                   <th className="text-center">XPM</th>
-                  <th className="text-right pr-4">Items</th>
+                  <th className="text-right pr-4">{t("matchDetails.items")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -245,19 +249,19 @@ function MatchDetails() {
       <div className="mb-12">
         <div className="flex items-center gap-4 mb-4">
           <div className="w-3 h-8 bg-brand-danger rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)]"></div>
-          <h2 className="text-2xl font-black heading-display text-brand-danger uppercase italic">TEAM DIRE</h2>
+          <h2 className="text-2xl font-black heading-display text-brand-danger uppercase italic">{t("matchDetails.teamDire")}</h2>
         </div>
         <div className="app-card p-0 overflow-hidden border-brand-danger/20 bg-white dark:bg-gaming-dark/60">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-brand-danger/5 text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-brand-danger/10">
-                  <th className="py-4 pl-4">Hero / Player</th>
+                  <th className="py-4 pl-4">{t("matchDetails.heroPlayer")}</th>
                   <th className="text-center">K / D / A</th>
                   <th className="text-center">KDA</th>
                   <th className="text-center">GPM</th>
                   <th className="text-center">XPM</th>
-                  <th className="text-right pr-4">Items</th>
+                  <th className="text-right pr-4">{t("matchDetails.items")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -271,7 +275,7 @@ function MatchDetails() {
       {/* Bottom Actions */}
       <div className="flex justify-center">
         <button onClick={() => navigate(-1)} className="app-button-secondary px-12 py-4 flex items-center gap-2 group">
-          BACK TO MATCH HISTORY <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+          {t("playerAnalytics.matchHistory")} <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </div>

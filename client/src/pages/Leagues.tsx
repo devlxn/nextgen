@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import { Search, ChevronLeft, ChevronRight, Trophy, Info } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface League {
   leagueid: number;
@@ -18,6 +19,7 @@ function Leagues() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalLeagues, setTotalLeagues] = useState(0);
+  const { t } = useLanguage();
 
   const fetchLeagues = async () => {
     setLoading(true);
@@ -33,8 +35,8 @@ function Leagues() {
       setTotalPages(response.data.totalPages);
       setTotalLeagues(response.data.totalLeagues);
       setError("");
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch leagues");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to fetch leagues");
     } finally {
       setLoading(false);
     }
@@ -58,13 +60,13 @@ function Leagues() {
       {/* Header Section */}
       <div className="text-center mb-12 relative">
         <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-9xl font-black text-slate-500/5 select-none italic uppercase tracking-tighter hidden md:block">
-          Tournaments
+          {t("leagues.background")}
         </div>
         <h1 className="text-4xl sm:text-6xl font-black heading-display mb-4 bg-gradient-to-r from-purple-600 to-brand-accent dark:from-brand-primary dark:to-brand-accent bg-clip-text text-transparent uppercase italic">
-          PRO <span className="text-brand-accent">LEAGUES</span>
+          {t("leagues.title")}
         </h1>
         <p className="text-slate-500 dark:text-slate-400 text-lg max-w-2xl mx-auto">
-          Explore professional and premium Dota 2 tournaments from around the world.
+          {t("leagues.subtitle")}
         </p>
       </div>
 
@@ -76,14 +78,14 @@ function Leagues() {
           </div>
           <input
             type="text"
-            placeholder="Search tournaments by name..."
+            placeholder={t("leagues.searchPlaceholder")}
             className="app-input pl-12 py-4 text-lg w-full focus:ring-2 focus:ring-brand-accent/50 transition-all bg-white dark:bg-gaming-dark/60"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           {searchTerm && !loading && (
             <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              {totalLeagues} FOUND
+              {totalLeagues} {t("common.found").toUpperCase()}
             </div>
           )}
         </div>
@@ -92,15 +94,15 @@ function Leagues() {
       {loading ? (
         <div className="min-h-[400px] flex flex-col items-center justify-center">
           <div className="w-16 h-16 border-4 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin shadow-neon-purple mb-4"></div>
-          <p className="text-brand-primary font-bold animate-pulse uppercase tracking-widest">Accessing League Database...</p>
+          <p className="text-brand-primary font-bold animate-pulse uppercase tracking-widest">{t("leagues.loading")}</p>
         </div>
       ) : error ? (
         <div className="min-h-[400px] flex items-center justify-center p-4">
           <div className="app-card max-w-md text-center border-brand-danger/30 bg-white dark:bg-gaming-dark/60">
             <div className="text-5xl mb-4">⚠️</div>
-            <h2 className="text-xl font-bold text-brand-danger mb-2 uppercase">Sync Error</h2>
+            <h2 className="text-xl font-bold text-brand-danger mb-2 uppercase">{t("leagues.syncError")}</h2>
             <p className="text-slate-500">{error}</p>
-            <button onClick={fetchLeagues} className="app-button mt-6">Retry</button>
+            <button onClick={fetchLeagues} className="app-button mt-6">{t("common.retry")}</button>
           </div>
         </div>
       ) : (
@@ -136,10 +138,10 @@ function Leagues() {
                   <div className="mt-auto pt-4 border-t border-slate-100 dark:border-gaming-border/10 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full animate-pulse ${league.tier === 'premium' ? 'bg-amber-500' : 'bg-brand-primary'}`}></div>
-                      <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Active / Recent</span>
+                      <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t("common.activeRecent")}</span>
                     </div>
                     <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest group-hover:underline">
-                      View Details
+                      {t("common.viewDetails")}
                     </span>
                   </div>
                 </div>
@@ -152,7 +154,7 @@ function Leagues() {
           {leagues.length === 0 && (
             <div className="text-center py-20 app-card bg-slate-500/5 border-dashed border-2 border-slate-200 dark:border-slate-800">
               <Info className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-              <p className="text-slate-500 text-xl font-bold uppercase tracking-tight">No tournaments found matching your search.</p>
+              <p className="text-slate-500 text-xl font-bold uppercase tracking-tight">{t("leagues.noTournaments")}</p>
             </div>
           )}
 
@@ -168,11 +170,11 @@ function Leagues() {
               </button>
               
               <div className="flex items-center gap-3">
-                <span className="text-slate-400 font-black uppercase tracking-widest text-[10px]">Page</span>
+                <span className="text-slate-400 font-black uppercase tracking-widest text-[10px]">{t("common.page")}</span>
                 <div className="bg-brand-primary text-white px-5 py-2 rounded-lg font-black shadow-neon-purple text-lg">
                   {currentPage}
                 </div>
-                <span className="text-slate-400 font-black uppercase tracking-widest text-[10px]">of {totalPages}</span>
+                <span className="text-slate-400 font-black uppercase tracking-widest text-[10px]">{t("leagues.of", { count: totalPages })}</span>
               </div>
 
               <button

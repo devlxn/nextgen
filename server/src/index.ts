@@ -57,6 +57,26 @@ interface SteamProfile {
   [key: string]: any;
 }
 
+const STEAM_ID_BASE = BigInt("76561197960265728");
+
+const steamIdToAccountId = (steamId: string) => {
+  return String(BigInt(steamId) - STEAM_ID_BASE);
+};
+
+const accountIdToSteamId = (accountId: string) => {
+  return String(BigInt(accountId) + STEAM_ID_BASE);
+};
+
+const fetchOpenDota = async <T>(path: string, fallback: T, timeout = 30000): Promise<T> => {
+  try {
+    const response = await axios.get(`https://api.opendota.com/api${path}`, { timeout });
+    return response.data ?? fallback;
+  } catch (err: any) {
+    console.error(`OpenDota request failed for ${path}:`, err.message);
+    return fallback;
+  }
+};
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -154,6 +174,48 @@ app.get("/api/logout", (req, res) => {
   });
 });
 
+app.get("/api/players/:steamId/analytics", async (req, res) => {
+  const { steamId } = req.params;
+
+  try {
+    const accountId = steamIdToAccountId(steamId);
+    const cacheKey = `player:${steamId}:analytics`;
+    const cachedData = await redisClient.get(cacheKey);
+    if (cachedData) return res.json(JSON.parse(cachedData));
+
+    const [player, wl, heroes, totals, counts, ratings, rankings] = await Promise.all([
+      fetchOpenDota<any>(`/players/${accountId}`, {}),
+      fetchOpenDota<any>(`/players/${accountId}/wl`, {}),
+      fetchOpenDota<any[]>(`/players/${accountId}/heroes`, []),
+      fetchOpenDota<any[]>(`/players/${accountId}/totals`, []),
+      fetchOpenDota<Record<string, any>>(`/players/${accountId}/counts`, {}),
+      fetchOpenDota<any[]>(`/players/${accountId}/ratings`, []),
+      fetchOpenDota<any[]>(`/players/${accountId}/rankings`, []),
+    ]);
+
+    const result = {
+      steamId,
+      accountId,
+      profile: player?.profile || null,
+      rankTier: player?.rank_tier || null,
+      leaderboardRank: player?.leaderboard_rank || null,
+      wl,
+      heroes,
+      totals,
+      counts,
+      ratings,
+      rankings,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await redisClient.setEx(cacheKey, 1800, JSON.stringify(result));
+    res.json(result);
+  } catch (err: any) {
+    console.error("Player analytics error:", err.message);
+    res.status(400).json({ error: "Failed to build player analytics" });
+  }
+});
+
 app.get("/api/matches/:steamId", async (req, res) => {
   const { steamId } = req.params;
   const page = parseInt(req.query.page as string || "1");
@@ -161,8 +223,7 @@ app.get("/api/matches/:steamId", async (req, res) => {
   const skip = (page - 1) * limit;
 
   try {
-    const STEAM_ID_BASE = BigInt("76561197960265728");
-    const accountId = String(BigInt(steamId) - STEAM_ID_BASE);
+    const accountId = steamIdToAccountId(steamId);
 
     const cacheKey = `matches:${steamId}:${page}`;
     const cachedData = await redisClient.get(cacheKey);
@@ -347,6 +408,44 @@ app.get("/api/leagues/:leagueId/teams", async (req, res) => {
   }
 });
 
+app.get("/api/constants/items", async (req, res) => {
+  const cacheKey = "constants:items:v2";
+
+  try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) return res.json(JSON.parse(cached));
+
+    const fs = require('fs');
+    const path = require('path');
+    const itemsPath = path.join(__dirname, '../data/items.json');
+
+    if (!fs.existsSync(itemsPath)) {
+      return res.status(404).json({ error: "Items data file not found" });
+    }
+
+    const rawItems = JSON.parse(fs.readFileSync(itemsPath, 'utf8'));
+    const itemsById = Object.entries(rawItems).reduce((acc: any, [key, item]: [string, any]) => {
+      if (item && item.id) {
+        acc[String(item.id)] = {
+          id: item.id,
+          key,
+          dname: item.dname || key,
+          img: item.img || "",
+          cost: item.cost || 0,
+          qual: item.qual || "",
+        };
+      }
+      return acc;
+    }, {});
+
+    await redisClient.setEx(cacheKey, 86400, JSON.stringify(itemsById));
+    res.json(itemsById);
+  } catch (err: any) {
+    console.error("Items constants local error:", err.message);
+    res.status(500).json({ error: "Failed to process local item constants" });
+  }
+});
+
 app.get("/api/search", async (req, res) => {
   const { query } = req.query;
   if (!query) return res.status(400).json({ error: "Query required" });
@@ -364,7 +463,7 @@ app.get("/api/search", async (req, res) => {
 
     if (response.data && response.data.profile) {
       const result = [{
-        steamId: String(BigInt(accountId) + BigInt("76561197960265728")),
+        steamId: accountIdToSteamId(accountId),
         displayName: response.data.profile.personaname,
         avatar: response.data.profile.avatarfull,
       }];

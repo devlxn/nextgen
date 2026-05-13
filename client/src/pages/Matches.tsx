@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { heroes } from "../data/heroes";
+import { getHeroImagePath, heroes } from "../data/heroes";
 import { Link, useSearchParams } from "react-router-dom";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface Match {
   match_id: number;
@@ -31,6 +32,7 @@ function Matches() {
   const [totalPages, setTotalPages] = useState(1);
   const [user, setUser] = useState<User | null>(null);
   const [searchParams] = useSearchParams();
+  const { t } = useLanguage();
   
   const targetSteamId = searchParams.get("steamId");
 
@@ -49,8 +51,9 @@ function Matches() {
           setError("Please search for a player or log in to view your matches");
           setLoading(false);
         }
-      } catch (err: any) {
-        setError(`Error: ${err.message}`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        setError(`Error: ${message}`);
         setLoading(false);
       }
     };
@@ -68,8 +71,9 @@ function Matches() {
       setTotalPages(response.data.totalPages);
       setPage(pageNum);
       setError(null);
-    } catch (err: any) {
-      setError(`Failed to fetch matches: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(`Failed to fetch matches: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -103,21 +107,26 @@ function Matches() {
       <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
         <div>
           <h1 className="text-4xl sm:text-5xl font-black heading-display bg-gradient-to-r from-purple-600 to-brand-accent dark:from-brand-primary dark:to-brand-accent bg-clip-text text-transparent mb-2">
-            {targetSteamId ? 'PLAYER HISTORY' : 'YOUR MATCHES'}
+            {targetSteamId ? t("matches.playerHistory") : t("common.yourMatches")}
           </h1>
           <p className="text-slate-500 dark:text-slate-400">
-            {targetSteamId ? `Viewing statistics for SteamID: ${targetSteamId}` : 'Track your recent performance and battle statistics.'}
+            {targetSteamId ? t("matches.viewingSteam", { steamId: targetSteamId }) : t("matches.trackRecent")}
           </p>
+          {(targetSteamId || user?.steamId) && (
+            <Link to={`/players/${targetSteamId || user?.steamId}/analytics`} className="inline-flex items-center mt-4 text-[10px] font-black uppercase tracking-widest text-brand-primary hover:underline">
+              {t("matches.openAnalytics")}
+            </Link>
+          )}
         </div>
         
         {matches.length > 0 && (
           <div className="flex gap-4">
             <div className="app-card py-3 px-6 flex flex-col items-center min-w-[120px] bg-white dark:bg-gaming-dark/60">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Win Rate</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t("common.winRate")}</span>
               <span className={`text-2xl font-black ${Number(winRate) >= 50 ? 'text-brand-success' : 'text-brand-danger'}`}>{winRate}%</span>
             </div>
             <div className="app-card py-3 px-6 flex flex-col items-center min-w-[120px] bg-white dark:bg-gaming-dark/60">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Avg KDA</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t("matches.avgKda")}</span>
               <span className="text-2xl font-black text-brand-primary">{kda}</span>
             </div>
           </div>
@@ -127,16 +136,16 @@ function Matches() {
       {loading && (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-16 h-16 border-4 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin shadow-neon-purple mb-4"></div>
-          <p className="text-brand-primary font-bold animate-pulse">SYNCHRONIZING DATA...</p>
+          <p className="text-brand-primary font-bold animate-pulse">{t("matches.syncing")}</p>
         </div>
       )}
 
       {error && (
         <div className="app-card border-brand-danger/30 bg-brand-danger/5 text-brand-danger text-center py-8">
           <div className="text-4xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold mb-2 uppercase">Information</h2>
+          <h2 className="text-xl font-bold mb-2 uppercase">{t("matches.information")}</h2>
           <p>{error}</p>
-          <Link to="/search" className="app-button mt-6 inline-block">Go to Search</Link>
+          <Link to="/search" className="app-button mt-6 inline-block">{t("matches.goToSearch")}</Link>
         </div>
       )}
 
@@ -146,7 +155,6 @@ function Matches() {
             {matches.map((match) => {
               const hero = heroes.find((h) => h.id === match.hero_id);
               const isWin = (match.radiant_win && match.player_slot < 128) || (!match.radiant_win && match.player_slot >= 128);
-              const heroName = hero?.name.replace("npc_dota_hero_", "") || "unknown";
               
               return (
                 <Link
@@ -158,19 +166,16 @@ function Matches() {
                     <div className="relative shrink-0">
                       <div className={`absolute -inset-1 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity ${isWin ? 'bg-brand-success' : 'bg-brand-danger'}`}></div>
                       <img
-                        src={`https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${heroName}.png`}
+                        src={getHeroImagePath(match.hero_id)}
                         alt={hero?.localized_name}
                         className="relative w-24 h-14 rounded-lg object-cover border border-slate-200 dark:border-white/10"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = `https://api.opendota.com/apps/dota2/images/heroes/${heroName}_full.png`;
-                        }}
                       />
                     </div>
                     
                     <div className="flex-grow">
                       <div className="flex items-center gap-3 mb-1">
                         <span className={`text-xs font-black uppercase tracking-tighter px-2 py-0.5 rounded ${isWin ? 'bg-brand-success/10 text-brand-success' : 'bg-brand-danger/10 text-brand-danger'}`}>
-                          {isWin ? 'Victory' : 'Defeat'}
+                          {isWin ? t("common.victory") : t("common.defeat")}
                         </span>
                         <span className="text-slate-500 text-xs font-mono">ID: {match.match_id}</span>
                       </div>
@@ -191,13 +196,13 @@ function Matches() {
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">Duration</div>
+                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">{t("matches.duration")}</div>
                         <div className="font-bold text-lg text-slate-700 dark:text-slate-300">
                           {Math.floor(match.duration / 60)}:{(match.duration % 60).toString().padStart(2, "0")}
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">KDA Ratio</div>
+                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">{t("matches.kdaRatio")}</div>
                         <div className="font-black text-lg text-brand-primary">
                           {((match.kills + match.assists) / Math.max(1, match.deaths)).toFixed(2)}
                         </div>
@@ -206,7 +211,7 @@ function Matches() {
                   </div>
 
                   <div className="flex sm:flex-col items-center justify-center gap-2 shrink-0 w-full sm:w-auto">
-                    <div className="app-button py-2 px-6 text-xs w-full sm:w-auto">DETAILS</div>
+                    <div className="app-button py-2 px-6 text-xs w-full sm:w-auto">{t("common.details").toUpperCase()}</div>
                   </div>
                 </Link>
               );
@@ -220,7 +225,7 @@ function Matches() {
               disabled={page === 1}
               className="app-button-secondary py-2 px-6 disabled:opacity-30"
             >
-              PREV
+              {t("common.prev").toUpperCase()}
             </button>
             <div className="flex gap-2">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -241,7 +246,7 @@ function Matches() {
               disabled={page === totalPages}
               className="app-button-secondary py-2 px-6 disabled:opacity-30"
             >
-              NEXT
+              {t("common.next").toUpperCase()}
             </button>
           </div>
         </div>
@@ -250,9 +255,9 @@ function Matches() {
       {!loading && !error && matches.length === 0 && (
         <div className="app-card text-center py-20 border-dashed border-slate-200 dark:border-gaming-border/20 bg-white dark:bg-gaming-dark/60">
           <div className="text-6xl mb-6 opacity-20">⚔️</div>
-          <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-300 mb-2">NO BATTLES FOUND</h2>
-          <p className="text-slate-500">Play some matches or try searching for another player.</p>
-          <Link to="/search" className="app-button mt-8 inline-block">SEARCH PLAYERS</Link>
+          <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-300 mb-2">{t("matches.noBattles")}</h2>
+          <p className="text-slate-500">{t("matches.noBattlesText")}</p>
+          <Link to="/search" className="app-button mt-8 inline-block">{t("dashboard.searchPlayers").toUpperCase()}</Link>
         </div>
       )}
     </div>

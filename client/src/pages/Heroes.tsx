@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { heroes } from "../data/heroes";
+import { getHeroImagePath, heroes } from "../data/heroes";
 import { Link } from "react-router-dom";
 import { Search, ChevronDown, ChevronRight, Swords, Shield, Brain, Gem } from "lucide-react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface Hero {
   id: number;
@@ -17,15 +18,16 @@ function Heroes() {
   const [search, setSearch] = useState("");
   const [attrFilter, setAttrFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const { t } = useLanguage();
 
   useEffect(() => {
   }, []);
 
   const attributeMap: { [key: string]: string } = {
-    str: "Strength",
-    agi: "Agility",
-    int: "Intelligence",
-    all: "Universal",
+    str: t("heroes.strength"),
+    agi: t("heroes.agility"),
+    int: t("heroes.intelligence"),
+    all: t("heroes.universal"),
   };
 
   const filteredHeroes: Hero[] = heroes.filter((hero: Hero) => {
@@ -64,10 +66,10 @@ function Heroes() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-brand-primary to-brand-accent drop-shadow-sm dark:drop-shadow-neon mb-4 uppercase italic heading-display">
-            Dota 2 <span className="text-brand-accent">Heroes</span>
+            {t("heroes.title")}
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-400 font-medium max-w-2xl mx-auto">
-            Unleash the power of ancient warriors and mystical beings. Discover their strengths, roles, and strategies.
+            {t("heroes.subtitle")}
           </p>
         </div>
 
@@ -79,7 +81,7 @@ function Heroes() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search heroes by name..."
+                placeholder={t("heroes.searchPlaceholder")}
                 className="app-input w-full pl-12 py-3.5 text-lg"
               />
             </div>
@@ -90,7 +92,7 @@ function Heroes() {
                   onChange={(e) => setAttrFilter(e.target.value)}
                   className="app-input min-w-[180px] appearance-none pr-10"
                 >
-                  <option value="">All Attributes</option>
+                  <option value="">{t("heroes.allAttributes")}</option>
                   {attributes.map((attr) => (
                     <option key={attr} value={attr}>
                       {attributeMap[attr]}
@@ -105,7 +107,7 @@ function Heroes() {
                   onChange={(e) => setRoleFilter(e.target.value)}
                   className="app-input min-w-[180px] appearance-none pr-10"
                 >
-                  <option value="">All Roles</option>
+                  <option value="">{t("heroes.allRoles")}</option>
                   {roles.map((role) => (
                     <option key={role} value={role}>
                       {role}
@@ -126,16 +128,13 @@ function Heroes() {
             >
               <Link to={`/heroes/${hero.id}/matchups`} className="block relative aspect-video overflow-hidden">
                 <img
-                  src={`/images/${hero.name.replace(
-                    "npc_dota_hero_",
-                    ""
-                  )}_full.png`}
+                  src={getHeroImagePath(hero.id)}
                   alt={hero.localized_name}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
                   <span className="text-white text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                    View Matchups <ChevronRight size={16} className="text-brand-accent" />
+                    {t("heroes.viewMatchups")} <ChevronRight size={16} className="text-brand-accent" />
                   </span>
                 </div>
               </Link>
@@ -158,8 +157,8 @@ function Heroes() {
                 
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Attack Type</span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">{hero.attack_type}</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t("heroes.attackType")}</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">{hero.attack_type === "Melee" ? t("heroes.melee") : t("heroes.ranged")}</span>
                   </div>
                   
                   <div className="flex flex-wrap gap-1.5 mt-2">
@@ -180,7 +179,7 @@ function Heroes() {
         
         {filteredHeroes.length === 0 && (
           <div className="text-center py-20 app-card bg-slate-500/5 border-dashed border-2 border-slate-200 dark:border-slate-800">
-            <p className="text-slate-500 text-xl font-bold uppercase tracking-tight">No heroes found matching your search.</p>
+            <p className="text-slate-500 text-xl font-bold uppercase tracking-tight">{t("heroes.noHeroes")}</p>
           </div>
         )}
       </div>

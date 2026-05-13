@@ -18,6 +18,9 @@ import ProTeams from "./pages/ProTeams";
 import HeroMatchups from "./pages/HeroMatchups";
 import Leagues from "./pages/Leagues";
 import LeagueDetails from "./pages/LeagueDetails";
+import Dashboard from "./pages/Dashboard";
+import PlayerAnalytics from "./pages/PlayerAnalytics";
+import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 
 interface User {
   steamId: string;
@@ -53,6 +56,7 @@ function MainApp() {
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
   const navigate = useNavigate();
   const location = useLocation();
+  const { language, toggleLanguage, t } = useLanguage();
 
   useEffect(() => {
     axios.get(`${API_URL}/api/user`, { withCredentials: true })
@@ -74,10 +78,11 @@ function MainApp() {
   };
 
   const navItems = [
-    { label: "SEARCH", path: "/search" },
-    { label: "HEROES", path: "/heroes" },
-    { label: "PRO TEAMS", path: "/pro-teams" },
-    { label: "TOURNAMENTS", path: "/leagues" },
+    { label: t("nav.dashboard"), path: "/dashboard" },
+    { label: t("nav.search"), path: "/search" },
+    { label: t("nav.heroes"), path: "/heroes" },
+    { label: t("nav.proTeams"), path: "/pro-teams" },
+    { label: t("nav.tournaments"), path: "/leagues" },
   ];
 
   return (
@@ -109,6 +114,13 @@ function MainApp() {
             >
               {theme === "dark" ? "🌙" : "☀️"}
             </button>
+            <button
+              onClick={toggleLanguage}
+              className="h-10 px-3 rounded-xl bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 transition-colors text-xs font-black tracking-widest text-slate-700 dark:text-slate-200"
+              title="Toggle Language"
+            >
+              {language === "en" ? "RU" : "EN"}
+            </button>
 
 	            {user ? (
 	              <Link to="/profile" className="flex items-center gap-4 hover:opacity-80 transition-all group">
@@ -117,7 +129,7 @@ function MainApp() {
 	              </Link>
 	            ) : (
               <a href={`${API_URL}/auth/steam`} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all active:scale-95">
-                LOGIN
+                {t("common.login").toUpperCase()}
               </a>
             )}
           </div>
@@ -133,25 +145,27 @@ function MainApp() {
               
               <div className="relative z-10 text-center max-w-4xl">
                 <h1 className="text-6xl sm:text-8xl font-black mb-8 leading-none tracking-tight text-slate-900 dark:text-white">
-                  MASTER THE <br />
-                  <span className="bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 dark:from-purple-400 dark:via-pink-500 dark:to-red-500 bg-clip-text text-transparent">BATTLEFIELD</span>
+                  {t("home.titleTop").toUpperCase()} <br />
+                  <span className="bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 dark:from-purple-400 dark:via-pink-500 dark:to-red-500 bg-clip-text text-transparent">{t("home.titleAccent").toUpperCase()}</span>
                 </h1>
                 <p className="text-xl text-slate-600 dark:text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
-                  Advanced analytics for Dota 2. Track your MMR, analyze match history, and dominate your games with professional-grade statistics.
+                  {t("home.subtitle")}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-6 justify-center">
                   <button onClick={() => navigate("/search")} className="bg-slate-900 dark:bg-white text-white dark:text-black px-12 py-4 rounded-2xl font-black text-lg hover:bg-purple-600 dark:hover:bg-purple-500 hover:text-white transition-all shadow-2xl hover:shadow-purple-500/40 active:scale-95">
-                    START TRACKING
+                    {t("home.startTracking").toUpperCase()}
                   </button>
                   <button onClick={() => navigate("/leagues")} className="bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 backdrop-blur-md px-12 py-4 rounded-2xl font-black text-lg hover:bg-slate-300 dark:hover:bg-white/10 transition-all active:scale-95 text-slate-900 dark:text-white">
-                    VIEW TOURNAMENTS
+                    {t("home.viewTournaments").toUpperCase()}
                   </button>
                 </div>
               </div>
             </div>
           } />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/matches" element={<Matches />} />
+          <Route path="/players/:steamId/analytics" element={<PlayerAnalytics />} />
           <Route path="/search" element={<Search />} />
           <Route path="/heroes" element={<Heroes />} />
           <Route path="/match/:matchId" element={<MatchDetails />} />
@@ -171,9 +185,11 @@ function MainApp() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <MainApp />
-    </BrowserRouter>
+    <LanguageProvider>
+      <BrowserRouter>
+        <MainApp />
+      </BrowserRouter>
+    </LanguageProvider>
   );
 }
 

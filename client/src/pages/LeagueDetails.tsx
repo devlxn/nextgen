@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface League {
   leagueid: number;
@@ -35,6 +36,7 @@ function LeagueDetails() {
   const [teams, setTeams] = useState<LeagueTeam[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"matches" | "teams">("matches");
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,7 +62,7 @@ function LeagueDetails() {
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0F0F23]">
       <div className="w-16 h-16 border-4 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin shadow-neon-purple mb-4"></div>
-      <p className="text-brand-primary font-bold animate-pulse uppercase tracking-widest">Loading Tournament Data...</p>
+      <p className="text-brand-primary font-bold animate-pulse uppercase tracking-widest">{t("leagueDetails.loading")}</p>
     </div>
   );
 
@@ -72,21 +74,21 @@ function LeagueDetails() {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
-                {league?.tier || "Tournament"}
+                {league?.tier || t("leagues.background")}
               </span>
               <span className="text-xs font-mono text-slate-400">ID: {leagueId}</span>
             </div>
             <h1 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
-              {league?.name || "League Details"}
+              {league?.name || t("leagueDetails.fallbackTitle")}
             </h1>
           </div>
           <div className="flex gap-4">
             <div className="text-center px-6 py-3 bg-slate-100 dark:bg-white/5 rounded-2xl">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Matches</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{t("common.matches")}</p>
               <p className="text-2xl font-black text-brand-primary">{matches.length}</p>
             </div>
             <div className="text-center px-6 py-3 bg-slate-100 dark:bg-white/5 rounded-2xl">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Teams</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{t("common.teams")}</p>
               <p className="text-2xl font-black text-brand-accent">{teams.length}</p>
             </div>
           </div>
@@ -103,7 +105,7 @@ function LeagueDetails() {
               : "text-slate-500 hover:text-brand-primary"
           }`}
         >
-          MATCHES
+          {t("common.matches").toUpperCase()}
         </button>
         <button
           onClick={() => setActiveTab("teams")}
@@ -113,7 +115,7 @@ function LeagueDetails() {
               : "text-slate-500 hover:text-brand-primary"
           }`}
         >
-          TEAMS
+          {t("common.teams").toUpperCase()}
         </button>
       </div>
 
@@ -155,7 +157,7 @@ function LeagueDetails() {
             ))
           ) : (
             <div className="app-card text-center py-20 bg-white dark:bg-gaming-dark/60">
-              <p className="text-slate-500 font-bold uppercase tracking-widest">No matches found for this league</p>
+              <p className="text-slate-500 font-bold uppercase tracking-widest">{t("leagueDetails.noMatches")}</p>
             </div>
           )}
         </div>
@@ -174,11 +176,11 @@ function LeagueDetails() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-xl">
-                    <p className="text-[10px] font-black text-slate-500 uppercase mb-1">Rating</p>
+                    <p className="text-[10px] font-black text-slate-500 uppercase mb-1">{t("leagueDetails.rating")}</p>
                     <p className="text-lg font-black text-brand-primary">{Math.floor(team.rating)}</p>
                   </div>
                   <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-xl">
-                    <p className="text-[10px] font-black text-slate-500 uppercase mb-1">W / L</p>
+                    <p className="text-[10px] font-black text-slate-500 uppercase mb-1">{t("leagueDetails.wl")}</p>
                     <p className="text-lg font-black">
                       <span className="text-brand-success">{team.wins}</span>
                       <span className="text-slate-300 mx-1">/</span>
@@ -190,7 +192,7 @@ function LeagueDetails() {
             ))
           ) : (
             <div className="col-span-full app-card text-center py-20 bg-white dark:bg-gaming-dark/60">
-              <p className="text-slate-500 font-bold uppercase tracking-widest">No teams found for this league</p>
+              <p className="text-slate-500 font-bold uppercase tracking-widest">{t("leagueDetails.noTeams")}</p>
             </div>
           )}
         </div>

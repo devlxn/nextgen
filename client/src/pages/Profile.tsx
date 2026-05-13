@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { User, Shield, Trophy, ExternalLink, LogIn, LogOut, Activity, Hash, Clock, ChevronRight } from "lucide-react";
-import { heroes } from "../data/heroes";
+import { getHeroImagePath, heroes } from "../data/heroes";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface UserProfile {
   steamId: string;
@@ -31,8 +32,9 @@ function Profile() {
   const [matches, setMatches] = useState<RecentMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [matchesLoading, setMatchesLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError] = useState("");
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchUserAndMatches = async () => {
@@ -112,16 +114,14 @@ function Profile() {
   };
 
   const getHeroUrl = (id: number) => {
-    const hero = heroes.find(h => h.id === id);
-    const name = hero?.name.replace("npc_dota_hero_", "") || "unknown";
-    return `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${name}.png`;
+    return getHeroImagePath(id);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-gaming-black">
         <div className="w-16 h-16 border-4 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin shadow-neon-purple mb-4"></div>
-        <p className="text-brand-primary font-black heading-display animate-pulse uppercase tracking-widest">Synchronizing Profile...</p>
+        <p className="text-brand-primary font-black heading-display animate-pulse uppercase tracking-widest">{t("profile.syncing")}</p>
       </div>
     );
   }
@@ -134,16 +134,16 @@ function Profile() {
             <LogIn className="w-10 h-10 text-brand-primary" />
           </div>
           <h1 className="text-3xl font-black heading-display text-slate-900 dark:text-white mb-4 uppercase italic">
-            ACCESS <span className="text-brand-primary">DENIED</span>
+            {t("profile.accessDenied")}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mb-8">
-            Please sign in with your Steam account to view your personalized Dota 2 statistics and profile.
+            {t("profile.signInText")}
           </p>
           <a 
             href={`${API_URL}/auth/steam`} 
             className="app-button w-full flex items-center justify-center gap-3 py-4 text-lg group"
           >
-            LOGIN WITH STEAM <ExternalLink size={20} className="group-hover:translate-x-1 transition-transform" />
+            {t("profile.loginSteam").toUpperCase()} <ExternalLink size={20} className="group-hover:translate-x-1 transition-transform" />
           </a>
         </div>
       </div>
@@ -187,22 +187,28 @@ function Profile() {
             
             <div className="flex flex-wrap justify-center md:justify-start gap-4 text-slate-500 dark:text-slate-400 font-mono text-xs uppercase tracking-widest">
               <div className="flex items-center gap-1.5"><Hash size={14} className="text-brand-primary" /> ID: {user.steamId}</div>
-              <div className="flex items-center gap-1.5"><Activity size={14} className="text-brand-success" /> Status: Online</div>
+              <div className="flex items-center gap-1.5"><Activity size={14} className="text-brand-success" /> {t("profile.statusOnline")}</div>
             </div>
           </div>
 
           <div className="flex flex-col gap-3 w-full md:w-auto">
             <button 
+              onClick={() => navigate(`/players/${user.steamId}/analytics`)}
+              className="app-button-secondary flex items-center justify-center gap-2 px-8 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/10"
+            >
+              <Activity size={18} /> {t("common.analytics").toUpperCase()}
+            </button>
+            <button 
               onClick={() => window.location.reload()}
               className="app-button flex items-center justify-center gap-2 px-8"
             >
-              REFRESH DATA
+              {t("common.refresh").toUpperCase()}
             </button>
             <a 
               href={`${API_URL}/api/logout`}
               className="app-button-secondary flex items-center justify-center gap-2 px-8 border-slate-200 dark:border-gaming-border/40 text-slate-600 dark:text-slate-400 hover:bg-brand-danger/10 hover:text-brand-danger hover:border-brand-danger/30"
             >
-              <LogOut size={18} /> LOGOUT
+              <LogOut size={18} /> {t("common.logout").toUpperCase()}
             </a>
           </div>
         </div>
@@ -214,7 +220,7 @@ function Profile() {
             <div className="p-2 bg-brand-primary/10 rounded-lg">
               <Trophy className="text-brand-primary" size={20} />
             </div>
-            <h3 className="font-black heading-display text-sm text-slate-900 dark:text-white uppercase tracking-widest">Win Rate</h3>
+            <h3 className="font-black heading-display text-sm text-slate-900 dark:text-white uppercase tracking-widest">{t("common.winRate")}</h3>
           </div>
           <div className="text-3xl font-black text-slate-900 dark:text-white mb-1">54.2%</div>
           <div className="w-full bg-slate-100 dark:bg-gaming-muted/30 h-2 rounded-full overflow-hidden">
@@ -238,10 +244,10 @@ function Profile() {
             <div className="p-2 bg-brand-accent/10 rounded-lg">
               <Clock className="text-brand-accent" size={20} />
             </div>
-            <h3 className="font-black heading-display text-sm text-slate-900 dark:text-white uppercase tracking-widest">Play Time</h3>
+            <h3 className="font-black heading-display text-sm text-slate-900 dark:text-white uppercase tracking-widest">{t("profile.playTime")}</h3>
           </div>
           <div className="text-3xl font-black text-slate-900 dark:text-white mb-1">2,450h</div>
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Since Oct 2014</p>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("profile.since")}</p>
         </div>
       </div>
 
@@ -249,17 +255,17 @@ function Profile() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <div className="w-3 h-8 bg-brand-primary rounded-full shadow-neon-purple"></div>
-            <h2 className="text-2xl font-black heading-display text-slate-900 dark:text-white uppercase italic">RECENT MATCHES</h2>
+            <h2 className="text-2xl font-black heading-display text-slate-900 dark:text-white uppercase italic">{t("profile.recentMatches")}</h2>
           </div>
           <Link to={`/matches?steamId=${user.steamId}`} className="text-[10px] font-black text-brand-primary uppercase tracking-widest hover:underline flex items-center gap-1">
-            VIEW ALL HISTORY <ChevronRight size={14} />
+            {t("profile.viewAllHistory")} <ChevronRight size={14} />
           </Link>
         </div>
 
         {matchesLoading ? (
           <div className="app-card py-12 flex flex-col items-center justify-center bg-white dark:bg-gaming-dark/60">
             <div className="w-10 h-10 border-2 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Retrieving Match History...</p>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{t("profile.retrievingHistory")}</p>
           </div>
         ) : matches.length > 0 ? (
           <div className="space-y-4">
@@ -281,7 +287,7 @@ function Profile() {
                     </div>
                     <div className="flex flex-col">
                       <span className={`text-xs font-black uppercase tracking-widest ${isWin ? 'text-brand-success' : 'text-brand-danger'}`}>
-                        {isWin ? 'Victory' : 'Defeat'}
+                        {isWin ? t("common.victory") : t("common.defeat")}
                       </span>
                       <span className="text-[10px] text-slate-500 font-mono uppercase tracking-tighter">
                         {heroes.find(h => h.id === match.hero_id)?.localized_name}
@@ -314,7 +320,7 @@ function Profile() {
           </div>
         ) : (
           <div className="app-card py-12 text-center bg-white dark:bg-gaming-dark/60 border-dashed border-2 border-slate-200 dark:border-gaming-border/20">
-            <p className="text-slate-500 text-sm font-black uppercase tracking-widest">No recent matches found.</p>
+            <p className="text-slate-500 text-sm font-black uppercase tracking-widest">{t("profile.noRecentMatches")}</p>
           </div>
         )}
       </div>
@@ -324,9 +330,9 @@ function Profile() {
           <div className="w-16 h-16 bg-slate-100 dark:bg-gaming-muted/30 rounded-full flex items-center justify-center mx-auto mb-4">
             <Activity className="text-slate-400" size={32} />
           </div>
-          <h3 className="text-xl font-black heading-display text-slate-900 dark:text-white uppercase italic mb-2">Advanced Analytics</h3>
+          <h3 className="text-xl font-black heading-display text-slate-900 dark:text-white uppercase italic mb-2">{t("profile.advancedAnalytics")}</h3>
           <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto text-sm">
-            Detailed hero performance and trend analytics are currently being synchronized with the OpenDota network.
+            {t("profile.advancedAnalyticsText")}
           </p>
         </div>
       </div>

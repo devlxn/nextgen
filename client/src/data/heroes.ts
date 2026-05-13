@@ -1134,3 +1134,16 @@ export const heroes = [
     legs: 2,
   },
 ];
+
+export const getHeroImagePathByName = (heroName?: string) => {
+  const imageName = (heroName || "npc_dota_hero_nevermore").replace(
+    "npc_dota_hero_",
+    ""
+  );
+  return `/images/${imageName}_full.png`;
+};
+
+export const getHeroImagePath = (heroId: number) => {
+  const hero = heroes.find((item) => item.id === heroId);
+  return getHeroImagePathByName(hero?.name);
+};

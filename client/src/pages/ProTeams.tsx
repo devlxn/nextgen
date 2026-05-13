@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useLanguage } from "../i18n/LanguageContext";
 
 interface Player {
   name: string;
@@ -10,11 +11,19 @@ interface Player {
   avatar?: string;
 }
 
+interface OpenDotaProPlayer {
+  name?: string;
+  personaname?: string;
+  steamid?: string;
+  avatarfull?: string;
+}
+
 function ProTeams() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const teamsData = [
     { name: "AVULUS", tag: "AVL", players: ["dEsire", "Fly", "Smiling Knight", "Worick", "Xibbe"] },
@@ -44,12 +53,12 @@ function ProTeams() {
       setError("");
       try {
         const response = await axios.get("https://api.opendota.com/api/proPlayers");
-        const apiPlayers = response.data as any[];
+        const apiPlayers = response.data as OpenDotaProPlayer[];
 
         const allPlayers: Player[] = teamsData.flatMap((team) =>
           team.players.map((playerName) => {
             const matchedPlayer = apiPlayers.find(
-              (p: any) => p.name === playerName || p.personaname === playerName
+              (p) => p.name === playerName || p.personaname === playerName
             );
             return {
               name: playerName,
@@ -61,8 +70,8 @@ function ProTeams() {
           })
         );
         setPlayers(allPlayers);
-      } catch (err: any) {
-        setError(err.message || "Failed to fetch pro players");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to fetch pro players");
       } finally {
         setLoading(false);
       }
@@ -79,7 +88,7 @@ function ProTeams() {
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0F0F23]">
       <div className="w-16 h-16 border-4 border-brand-primary/20 border-t-brand-primary rounded-full animate-spin shadow-neon-purple mb-4"></div>
-      <p className="text-brand-primary font-bold animate-pulse">LOADING PRO TEAMS...</p>
+        <p className="text-brand-primary font-bold animate-pulse">{t("proTeams.loading").toUpperCase()}</p>
     </div>
   );
 
@@ -87,9 +96,9 @@ function ProTeams() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0F0F23] p-4">
       <div className="app-card max-w-md text-center border-brand-danger/30 bg-white dark:bg-gaming-dark/60">
         <div className="text-5xl mb-4">⚠️</div>
-        <h2 className="text-xl font-bold text-brand-danger mb-2 uppercase">Sync Error</h2>
+        <h2 className="text-xl font-bold text-brand-danger mb-2 uppercase">{t("leagues.syncError")}</h2>
         <p className="text-slate-500">{error}</p>
-        <button onClick={() => window.location.reload()} className="app-button mt-6">Retry</button>
+        <button onClick={() => window.location.reload()} className="app-button mt-6">{t("common.retry")}</button>
       </div>
     </div>
   );
@@ -110,10 +119,10 @@ function ProTeams() {
     <div className="max-w-7xl mx-auto px-4 py-12">
       <div className="text-center mb-16">
         <h1 className="text-4xl sm:text-6xl font-black heading-display mb-4 bg-gradient-to-r from-purple-600 to-brand-accent dark:from-brand-primary dark:to-brand-accent bg-clip-text text-transparent">
-          PRO TEAMS
+          {t("proTeams.title")}
         </h1>
         <p className="text-slate-500 dark:text-slate-400 text-lg">
-          Explore the rosters of the world's best Dota 2 organizations.
+          {t("proTeams.subtitle")}
         </p>
       </div>
 
@@ -130,7 +139,7 @@ function ProTeams() {
                 </h2>
               </div>
               <span className="text-xs font-mono text-slate-400 uppercase tracking-widest">
-                {team.players.length} Active Players
+                {t("proTeams.activePlayers", { count: team.players.length })}
               </span>
             </div>
 
@@ -155,11 +164,11 @@ function ProTeams() {
                     </h3>
                     {player.steamId ? (
                       <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        View Stats
+                        {t("common.viewStats")}
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                        Private
+                        {t("common.private")}
                       </span>
                     )}
                   </div>
